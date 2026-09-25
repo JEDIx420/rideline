@@ -53,12 +53,20 @@ export class Game {
     });
 
     this.hideLoading();
+
+    // Start render loop immediately for background 3D scene preview
+    this.gameLoop = new GameLoop(
+      this.sceneManager.engine,
+      this.update.bind(this),
+      this.render.bind(this)
+    );
+    this.gameLoop.start();
   }
 
   private createLoadingOverlay(): void {
     this.loadingOverlay = document.createElement('div');
     this.loadingOverlay.id = 'rideline-loading-overlay';
-    this.loadingOverlay.className = 'loading-overlay-container';
+    this.loadingOverlay.className = 'loading-overlay-container hidden';
     this.loadingOverlay.innerHTML = `
       <div class="loading-box">
         <div class="loading-spinner"></div>
