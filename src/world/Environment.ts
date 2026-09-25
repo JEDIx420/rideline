@@ -205,6 +205,7 @@ export class Environment {
     const treeProto = Mesh.MergeMeshes([trunk, foliage], true, true, undefined, false, true);
     if (!treeProto) return;
     treeProto.parent = this.rootMesh;
+    treeProto.receiveShadows = true;
     treeProto.isVisible = false;
 
     // Rock Prototype
@@ -218,6 +219,7 @@ export class Environment {
     rockMat.albedoColor = new Color3(0.45, 0.44, 0.42);
     rockMat.roughness = 0.95;
     rockProto.material = rockMat;
+    rockProto.receiveShadows = true;
     rockProto.isVisible = false;
 
     const step = Math.max(3, Math.floor(6 / density));
@@ -240,7 +242,6 @@ export class Environment {
       const treeScale = 0.8 + ((i * 7) % 50) / 70;
       treeInstance.scaling.set(treeScale, treeScale, treeScale);
       treeInstance.rotation.y = (i * 13) % (Math.PI * 2);
-      treeInstance.receiveShadows = true;
       if (this.shadowGenerator) {
         this.shadowGenerator.addShadowCaster(treeInstance, false);
       }
@@ -257,7 +258,6 @@ export class Environment {
         const rockScale = 0.9 + ((i * 5) % 40) / 40;
         rockInstance.scaling.set(rockScale * 1.4, rockScale * 0.8, rockScale * 1.2);
         rockInstance.rotation.set((i * 3) % 3, (i * 5) % 6, (i * 7) % 3);
-        rockInstance.receiveShadows = true;
         this.propMeshes.push(rockInstance);
       }
     }

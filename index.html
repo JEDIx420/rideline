@@ -4,13 +4,127 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏍️</text></svg>" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <meta name="theme-color" content="#0a0c10" />
+    <meta name="theme-color" content="#07090c" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="description" content="RIDELINE - Infinite Roads Ahead. Browser-based 3D superbike motorcycle riding simulator powered by Babylon.js and Web Audio." />
     <title>RIDELINE &bull; Infinite Roads Ahead</title>
+    <style>
+      /* Immediate Zero-Latency Splash Screen */
+      #rideline-initial-loader {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: radial-gradient(circle at center, #101724 0%, #06080b 100%);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 999999;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        color: #f0f3f8;
+        padding: 1.5rem;
+        transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.6s;
+      }
+      #rideline-initial-loader.loaded {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+      .init-brand-wrap {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-bottom: 2.2rem;
+      }
+      .init-logo {
+        font-size: 3rem;
+        font-weight: 900;
+        letter-spacing: 0.4rem;
+        background: linear-gradient(135deg, #ffffff 30%, #00e5ff 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        text-shadow: 0 0 40px rgba(0, 229, 255, 0.4);
+      }
+      .init-tagline {
+        font-size: 0.85rem;
+        font-weight: 700;
+        letter-spacing: 0.25rem;
+        color: #8a94a6;
+        text-transform: uppercase;
+        margin-top: 0.3rem;
+      }
+      .init-spinner-ring {
+        width: 54px;
+        height: 54px;
+        border: 3.5px solid rgba(0, 229, 255, 0.12);
+        border-top-color: #00e5ff;
+        border-radius: 50%;
+        animation: initSpin 0.9s linear infinite;
+        margin-bottom: 1.8rem;
+      }
+      @keyframes initSpin {
+        to { transform: rotate(360deg); }
+      }
+      .init-progress-wrap {
+        width: 100%;
+        max-width: 320px;
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+      }
+      .init-bar-track {
+        width: 100%;
+        height: 6px;
+        background: rgba(255, 255, 255, 0.08);
+        border-radius: 3px;
+        overflow: hidden;
+      }
+      .init-bar-fill {
+        height: 100%;
+        width: 5%;
+        background: linear-gradient(90deg, #0070f3, #00e5ff);
+        border-radius: 3px;
+        transition: width 0.15s ease-out;
+      }
+      .init-status-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.08rem;
+        color: #8a94a6;
+      }
+      .init-pct {
+        color: #00e5ff;
+        font-family: ui-monospace, SFMono-Regular, monospace;
+        font-size: 0.8rem;
+      }
+    </style>
   </head>
   <body>
+    <!-- Initial Instant Splash Loader -->
+    <div id="rideline-initial-loader">
+      <div class="init-brand-wrap">
+        <div class="init-logo">RIDELINE</div>
+        <div class="init-tagline">Infinite Roads Ahead</div>
+      </div>
+      <div class="init-spinner-ring"></div>
+      <div class="init-progress-wrap">
+        <div class="init-bar-track">
+          <div class="init-bar-fill" id="init-loader-bar"></div>
+        </div>
+        <div class="init-status-row">
+          <span id="init-loader-status">INITIALIZING 3D ENGINE...</span>
+          <span class="init-pct" id="init-loader-pct">0%</span>
+        </div>
+      </div>
+    </div>
+
     <div id="app">
       <canvas id="renderCanvas" touch-action="none"></canvas>
     </div>
