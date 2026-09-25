@@ -1,5 +1,6 @@
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { BikePhysicsConfig } from '../config/physics';
+import { BikeAudioProfile } from '../audio/AudioProfile';
 
 export interface EngineConfig {
   idleRpm: number;
@@ -47,6 +48,13 @@ export interface CameraAnchors {
   riderLookAtOffset: Vector3;
 }
 
+export interface GarageCameraConfig {
+  radius: number;
+  alpha: number;
+  beta: number;
+  targetOffset: Vector3;
+}
+
 export interface BikeDefinition {
   id: string;
   displayName: string;
@@ -62,4 +70,7 @@ export interface BikeDefinition {
   transmission: TransmissionConfig;
   nodeMapping: NodeMapping;
   cameraAnchors: CameraAnchors;
+  audioProfile?: BikeAudioProfile;
+  garageCamera?: GarageCameraConfig;
 }
+

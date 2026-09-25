@@ -14,4 +14,10 @@ export class World {
     this.terrain = new Terrain(this.scene);
     this.environment = new Environment(this.scene, this.road, graphics);
   }
+
+  public setVisible(visible: boolean): void {
+    if (this.road.roadMesh) this.road.roadMesh.setEnabled(visible);
+    if (this.terrain.terrainMesh) this.terrain.terrainMesh.setEnabled(visible);
+    this.environment.setVisible(visible);
+  }
 }

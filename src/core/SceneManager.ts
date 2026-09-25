@@ -1,6 +1,7 @@
 import { Engine } from '@babylonjs/core/Engines/engine';
 import { Scene } from '@babylonjs/core/scene';
 import { Color4 } from '@babylonjs/core/Maths/math.color';
+import { ImageProcessingConfiguration } from '@babylonjs/core/Materials/imageProcessingConfiguration';
 import { GraphicsSettings, GRAPHICS_PRESETS, GraphicsQuality } from '../config/graphics';
 
 export class SceneManager {
@@ -26,10 +27,19 @@ export class SceneManager {
     });
 
     this.scene = new Scene(this.engine);
-    this.scene.clearColor = new Color4(0.74, 0.82, 0.92, 1.0);
+    this.scene.clearColor = new Color4(0.06, 0.07, 0.09, 1.0);
 
+    this.setupColorGrading();
     this.applyGraphicsPreset(initialPreset);
     this.setupResizeHandler();
+  }
+
+  private setupColorGrading(): void {
+    const ipc = this.scene.imageProcessingConfiguration;
+    ipc.toneMappingEnabled = true;
+    ipc.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES;
+    ipc.exposure = 1.1;
+    ipc.contrast = 1.15;
   }
 
   public applyGraphicsPreset(preset: GraphicsQuality): void {

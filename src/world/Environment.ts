@@ -10,6 +10,7 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { InstancedMesh } from '@babylonjs/core/Meshes/instancedMesh';
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
+import { HDRCubeTexture } from '@babylonjs/core/Materials/Textures/hdrCubeTexture';
 import { GraphicsSettings } from '../config/graphics';
 import { Road } from './Road';
 
@@ -18,50 +19,68 @@ export class Environment {
   public ambientLight: HemisphericLight | null = null;
   public shadowGenerator: ShadowGenerator | null = null;
   public oceanMesh: Mesh | null = null;
+  public coastalEnvTexture: HDRCubeTexture | null = null;
 
   private guardrailMeshes: Mesh[] = [];
   private propMeshes: (Mesh | InstancedMesh)[] = [];
+  private rootMesh: Mesh;
 
   constructor(
     private scene: Scene,
     private road: Road,
     private graphics: GraphicsSettings
   ) {
+    this.rootMesh = new Mesh('world_env_root', this.scene);
     this.setupAtmosphere();
+    this.setupEnvironmentTexture();
     this.setupLighting();
     this.setupOcean();
     this.setupGuardrails();
     this.setupProps();
   }
 
+  private setupEnvironmentTexture(): void {
+    const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, '') + '/';
+    const hdrUrl = baseUrl + 'assets/env/coastal_sky.hdr';
+
+    try {
+      this.coastalEnvTexture = new HDRCubeTexture(hdrUrl, this.scene, 512, false, true, false, true);
+      this.scene.environmentTexture = this.coastalEnvTexture;
+      this.scene.environmentIntensity = 0.95;
+    } catch (e) {
+      console.warn('Could not load coastal HDR map, falling back to standard sky:', e);
+    }
+  }
+
   private setupAtmosphere(): void {
-    // Subtle coastal atmospheric haze / fog
+    // Subtle coastal maritime haze / fog
     this.scene.fogMode = Scene.FOGMODE_EXP2;
-    this.scene.fogDensity = 0.00045;
-    this.scene.fogColor = new Color3(0.74, 0.82, 0.92); // Crisp maritime haze
-    this.scene.clearColor = new Color4(0.74, 0.82, 0.92, 1.0);
+    this.scene.fogDensity = 0.00038;
+    this.scene.fogColor = new Color3(0.72, 0.80, 0.90);
+    this.scene.clearColor = new Color4(0.72, 0.80, 0.90, 1.0);
 
     // Sky Dome
     const skybox = MeshBuilder.CreateSphere('sky_dome', { diameter: 4500, segments: 16 }, this.scene);
+    skybox.parent = this.rootMesh;
     const skyMat = new StandardMaterial('sky_mat', this.scene);
     skyMat.backFaceCulling = false;
     skyMat.diffuseColor = new Color3(0, 0, 0);
     skyMat.specularColor = new Color3(0, 0, 0);
-    skyMat.emissiveColor = new Color3(0.42, 0.65, 0.88); // Sky blue
+    skyMat.emissiveColor = new Color3(0.38, 0.62, 0.86);
     skybox.material = skyMat;
     skybox.infiniteDistance = true;
   }
 
   private setupLighting(): void {
-    // Hemispheric ambient light (Sky blue from above, warm earth from ground)
+    // Hemispheric ambient light
     this.ambientLight = new HemisphericLight(
       'hemi_ambient',
       new Vector3(0, 1, 0),
       this.scene
     );
-    this.ambientLight.intensity = 0.85;
-    this.ambientLight.groundColor = new Color3(0.25, 0.22, 0.18);
-    this.ambientLight.diffuse = new Color3(0.9, 0.94, 1.0);
+    this.ambientLight.intensity = 0.8;
+    this.ambientLight.groundColor = new Color3(0.24, 0.22, 0.18);
+    this.ambientLight.diffuse = new Color3(0.92, 0.95, 1.0);
 
     // Directional Sun Light
     this.sunLight = new DirectionalLight(
@@ -70,8 +89,8 @@ export class Environment {
       this.scene
     );
     this.sunLight.position = new Vector3(300, 500, 300);
-    this.sunLight.intensity = 2.2;
-    this.sunLight.diffuse = new Color3(1.0, 0.96, 0.88); // Warm sun
+    this.sunLight.intensity = 2.4;
+    this.sunLight.diffuse = new Color3(1.0, 0.97, 0.90);
     this.sunLight.specular = new Color3(1.0, 1.0, 0.95);
 
     // Shadows based on graphics quality preset
@@ -82,29 +101,30 @@ export class Environment {
       );
       const csg = this.shadowGenerator as CascadedShadowGenerator;
       csg.numCascades = this.graphics.shadowCascades;
-      csg.shadowMaxZ = 350;
-      csg.lambda = 0.85;
-      csg.cascadeBlendPercentage = 0.1;
+      csg.shadowMaxZ = 250;
+      csg.lambda = 0.9;
+      csg.cascadeBlendPercentage = 0.15;
       csg.usePercentageCloserFiltering = true;
-      csg.filteringQuality = ShadowGenerator.QUALITY_MEDIUM;
-      csg.bias = 0.003;
+      csg.filteringQuality = ShadowGenerator.QUALITY_HIGH;
+      csg.bias = 0.0005;
+      csg.normalBias = 0.02;
     }
   }
 
   private setupOcean(): void {
-    // Ocean water surface plane
     this.oceanMesh = MeshBuilder.CreateGround(
       'ocean_plane',
-      { width: 4000, height: 4000, subdivisions: 4 },
+      { width: 4500, height: 4500, subdivisions: 4 },
       this.scene
     );
+    this.oceanMesh.parent = this.rootMesh;
     this.oceanMesh.position.set(-800, -3.5, -200);
 
     const oceanMat = new PBRMaterial('ocean_pbr_mat', this.scene);
-    oceanMat.albedoColor = new Color3(0.04, 0.16, 0.32); // Deep coastal ocean blue
+    oceanMat.albedoColor = new Color3(0.03, 0.14, 0.28);
     oceanMat.metallic = 0.85;
-    oceanMat.roughness = 0.12;
-    oceanMat.alpha = 0.92;
+    oceanMat.roughness = 0.14;
+    oceanMat.alpha = 0.94;
     oceanMat.subSurface.isRefractionEnabled = true;
     oceanMat.subSurface.indexOfRefraction = 1.333;
 
@@ -118,11 +138,10 @@ export class Environment {
     const halfWidth = this.road.width * 0.5 + 0.3;
 
     const guardMat = new PBRMaterial('guardrail_pbr_mat', this.scene);
-    guardMat.metallic = 0.9;
-    guardMat.roughness = 0.35;
-    guardMat.albedoColor = new Color3(0.85, 0.87, 0.9);
+    guardMat.metallic = 0.92;
+    guardMat.roughness = 0.30;
+    guardMat.albedoColor = new Color3(0.85, 0.87, 0.90);
 
-    // Generate continuous outer metallic barrier along coastal edge
     const outerRailPath: Vector3[] = [];
     for (let i = 0; i < n; i += 2) {
       const curr = splinePoints[i];
@@ -130,9 +149,8 @@ export class Environment {
       const tangent = next.subtract(curr).normalize();
       const right = Vector3.Cross(Vector3.Up(), tangent).normalize();
 
-      // Outer side of road (right side)
       const railPos = curr.add(right.scale(halfWidth));
-      railPos.y += 0.55; // 0.55m height
+      railPos.y += 0.55;
       outerRailPath.push(railPos);
     }
     outerRailPath.push(outerRailPath[0]);
@@ -146,6 +164,7 @@ export class Environment {
       },
       this.scene
     );
+    railMesh.parent = this.rootMesh;
     railMesh.material = guardMat;
     railMesh.receiveShadows = true;
     if (this.shadowGenerator) {
@@ -179,12 +198,13 @@ export class Environment {
     trunk.material = trunkMat;
 
     const foliageMat = new PBRMaterial('foliage_mat', this.scene);
-    foliageMat.albedoColor = new Color3(0.12, 0.28, 0.14); // Deep forest pine
+    foliageMat.albedoColor = new Color3(0.12, 0.28, 0.14);
     foliageMat.roughness = 0.85;
     foliage.material = foliageMat;
 
     const treeProto = Mesh.MergeMeshes([trunk, foliage], true, true, undefined, false, true);
     if (!treeProto) return;
+    treeProto.parent = this.rootMesh;
     treeProto.isVisible = false;
 
     // Rock Prototype
@@ -193,13 +213,13 @@ export class Environment {
       { type: 1, size: 1.8 },
       this.scene
     );
+    rockProto.parent = this.rootMesh;
     const rockMat = new PBRMaterial('rock_mat', this.scene);
     rockMat.albedoColor = new Color3(0.45, 0.44, 0.42);
     rockMat.roughness = 0.95;
     rockProto.material = rockMat;
     rockProto.isVisible = false;
 
-    // Place instanced trees and rocks along the mountain slopes
     const step = Math.max(3, Math.floor(6 / density));
     let treeId = 0;
     let rockId = 0;
@@ -210,12 +230,12 @@ export class Environment {
       const tangent = next.subtract(pt).normalize();
       const right = Vector3.Cross(Vector3.Up(), tangent).normalize();
 
-      // Left mountain side props
       const offsetL = 12 + ((i * 17) % 25);
       const treePos = pt.add(right.scale(-offsetL));
       treePos.y = pt.y - 0.2;
 
       const treeInstance = treeProto.createInstance(`tree_${treeId++}`);
+      treeInstance.parent = this.rootMesh;
       treeInstance.position.copyFrom(treePos);
       const treeScale = 0.8 + ((i * 7) % 50) / 70;
       treeInstance.scaling.set(treeScale, treeScale, treeScale);
@@ -226,13 +246,13 @@ export class Environment {
       }
       this.propMeshes.push(treeInstance);
 
-      // Rocks
       if (i % (step * 2) === 0) {
         const offsetR = 10 + ((i * 11) % 18);
         const rockPos = pt.add(right.scale(-offsetR));
         rockPos.y = pt.y - 0.3;
 
         const rockInstance = rockProto.createInstance(`rock_${rockId++}`);
+        rockInstance.parent = this.rootMesh;
         rockInstance.position.copyFrom(rockPos);
         const rockScale = 0.9 + ((i * 5) % 40) / 40;
         rockInstance.scaling.set(rockScale * 1.4, rockScale * 0.8, rockScale * 1.2);
@@ -241,5 +261,22 @@ export class Environment {
         this.propMeshes.push(rockInstance);
       }
     }
+  }
+
+  public setVisible(visible: boolean): void {
+    this.rootMesh.setEnabled(visible);
+    if (this.sunLight) this.sunLight.setEnabled(visible);
+    if (this.ambientLight) this.ambientLight.setEnabled(visible);
+    if (visible && this.coastalEnvTexture) {
+      this.scene.environmentTexture = this.coastalEnvTexture;
+      this.scene.environmentIntensity = 0.95;
+    }
+  }
+
+  public dispose(): void {
+    this.rootMesh.dispose(false, true);
+    this.sunLight?.dispose();
+    this.ambientLight?.dispose();
+    this.coastalEnvTexture?.dispose();
   }
 }

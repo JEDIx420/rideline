@@ -1,12 +1,17 @@
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
-import { Vector3 } from '@babylonjs/core/Maths/math.vector';
+import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector';
 import { BikeDefinition } from './BikeDefinition';
 import { BikePhysics } from './BikePhysics';
 
+interface BoundNodeInfo {
+  node: TransformNode;
+  initialRotation: Quaternion;
+}
+
 export class BikeVisualController {
-  private frontWheelNodes: TransformNode[] = [];
-  private rearWheelNodes: TransformNode[] = [];
-  private steeringNodes: TransformNode[] = [];
+  private frontWheelNodes: BoundNodeInfo[] = [];
+  private rearWheelNodes: BoundNodeInfo[] = [];
+  private steeringNodes: BoundNodeInfo[] = [];
   private rootTransformNode: TransformNode | null = null;
 
   private wheelRotationRad: number = 0;
@@ -24,34 +29,49 @@ export class BikeVisualController {
 
     const { nodeMapping } = this.definition;
 
-    // Find Front Wheel nodes
-    const fw = allNodes.get(nodeMapping.frontWheelNodeName);
-    if (fw) this.frontWheelNodes.push(fw);
+    const captureNode = (name: string, list: BoundNodeInfo[]) => {
+      const node = allNodes.get(name);
+      if (!node) return;
+      if (list.some((item) => item.node === node)) return;
+
+      let initRot = node.rotationQuaternion
+        ? node.rotationQuaternion.clone()
+        : Quaternion.RotationYawPitchRoll(node.rotation.y, node.rotation.x, node.rotation.z);
+
+      if (!node.rotationQuaternion) {
+        node.rotationQuaternion = initRot.clone();
+      }
+
+      list.push({ node, initialRotation: initRot });
+    };
+
+    // Front Wheel nodes
+    captureNode(nodeMapping.frontWheelNodeName, this.frontWheelNodes);
     if (nodeMapping.frontWheelSubNodeNames) {
       for (const name of nodeMapping.frontWheelSubNodeNames) {
-        const sub = allNodes.get(name);
-        if (sub && !this.frontWheelNodes.includes(sub)) this.frontWheelNodes.push(sub);
+        captureNode(name, this.frontWheelNodes);
       }
     }
 
-    // Find Rear Wheel nodes
-    const rw = allNodes.get(nodeMapping.rearWheelNodeName);
-    if (rw) this.rearWheelNodes.push(rw);
+    // Rear Wheel nodes
+    captureNode(nodeMapping.rearWheelNodeName, this.rearWheelNodes);
     if (nodeMapping.rearWheelSubNodeNames) {
       for (const name of nodeMapping.rearWheelSubNodeNames) {
-        const sub = allNodes.get(name);
-        if (sub && !this.rearWheelNodes.includes(sub)) this.rearWheelNodes.push(sub);
+        captureNode(name, this.rearWheelNodes);
       }
     }
 
-    // Find Steering / Fork / Handlebar nodes
+    // Steering / Fork / Handlebar nodes
     if (nodeMapping.frontForkNodeName) {
-      const fork = allNodes.get(nodeMapping.frontForkNodeName);
-      if (fork) this.steeringNodes.push(fork);
+      captureNode(nodeMapping.frontForkNodeName, this.steeringNodes);
+    }
+    if (nodeMapping.frontForkSubNodeNames) {
+      for (const name of nodeMapping.frontForkSubNodeNames) {
+        captureNode(name, this.steeringNodes);
+      }
     }
     if (nodeMapping.handlebarsNodeName) {
-      const bars = allNodes.get(nodeMapping.handlebarsNodeName);
-      if (bars && !this.steeringNodes.includes(bars)) this.steeringNodes.push(bars);
+      captureNode(nodeMapping.handlebarsNodeName, this.steeringNodes);
     }
   }
 
@@ -67,17 +87,20 @@ export class BikeVisualController {
     const deltaWheelAngle = (physics.speedMps / wheelRadius) * dt;
     this.wheelRotationRad += deltaWheelAngle;
 
-    // Rotate front and rear wheels around their local pitch/axle axis (X axis in model local space)
-    for (const node of this.frontWheelNodes) {
-      node.rotation = new Vector3(this.wheelRotationRad, 0, 0);
+    const wheelRotDelta = Quaternion.RotationAxis(Vector3.Right(), this.wheelRotationRad);
+
+    // Apply transform-safe rotation relative to initial authored transforms
+    for (const info of this.frontWheelNodes) {
+      info.initialRotation.multiplyToRef(wheelRotDelta, info.node.rotationQuaternion!);
     }
-    for (const node of this.rearWheelNodes) {
-      node.rotation = new Vector3(this.wheelRotationRad, 0, 0);
+    for (const info of this.rearWheelNodes) {
+      info.initialRotation.multiplyToRef(wheelRotDelta, info.node.rotationQuaternion!);
     }
 
     // 3. Front Fork / Handlebar Steering Rotation around steering head axis
-    for (const node of this.steeringNodes) {
-      node.rotation = new Vector3(0, physics.steerAngleRad, 0);
+    const steerRotDelta = Quaternion.RotationAxis(Vector3.Up(), physics.steerAngleRad);
+    for (const info of this.steeringNodes) {
+      info.initialRotation.multiplyToRef(steerRotDelta, info.node.rotationQuaternion!);
     }
   }
 

@@ -4,15 +4,19 @@ import { World } from '../world/World';
 import { BikeDefinition } from '../bikes/BikeDefinition';
 import { BikeLoader, LoadedBike } from '../bikes/BikeLoader';
 import { BikeController } from '../bikes/BikeController';
-import { CameraManager } from '../cameras/CameraManager';
+import { CameraManager, CameraMode } from '../cameras/CameraManager';
 import { InputManager } from '../input/InputManager';
 import { AudioManager } from '../audio/AudioManager';
 import { HUD } from '../ui/HUD';
 import { MobileControls } from '../ui/MobileControls';
 import { RotateDeviceOverlay } from '../ui/RotateDeviceOverlay';
 import { DebugOverlay } from '../debug/DebugOverlay';
-import { StartScreen, StartScreenResult } from '../ui/StartScreen';
+import { GarageController } from '../garage/GarageController';
+import { SettingsModal, SettingsState } from '../ui/SettingsModal';
+import { SoundUnlockPrompt } from '../ui/SoundUnlockPrompt';
 import { GraphicsQuality } from '../config/graphics';
+
+export type GameState = 'garage' | 'ride';
 
 export class Game {
   public sceneManager: SceneManager;
@@ -22,15 +26,19 @@ export class Game {
   public inputManager: InputManager;
   public audioManager: AudioManager;
 
+  public garageController: GarageController;
+  public settingsModal: SettingsModal;
+  public soundUnlockPrompt: SoundUnlockPrompt;
   public hud: HUD;
   public mobileControls: MobileControls;
   public rotateOverlay: RotateDeviceOverlay;
   public debugOverlay: DebugOverlay;
-  public startScreen: StartScreen;
 
+  public currentState: GameState = 'garage';
   public activeBike: BikeController | null = null;
   public loadedBikeData: LoadedBike | null = null;
   public currentGraphicsQuality: GraphicsQuality = 'balanced';
+  public defaultCameraMode: CameraMode = 'chase';
 
   private loadingOverlay!: HTMLElement;
 
@@ -38,6 +46,8 @@ export class Game {
     this.createLoadingOverlay();
     this.sceneManager = new SceneManager(canvasId, this.currentGraphicsQuality);
     this.world = new World(this.sceneManager.scene, this.sceneManager.graphics);
+    this.world.setVisible(false); // World hidden while in 3D Garage Showroom
+
     this.cameraManager = new CameraManager(this.sceneManager.scene);
     this.inputManager = new InputManager();
     this.audioManager = new AudioManager();
@@ -46,21 +56,63 @@ export class Game {
     this.mobileControls = new MobileControls(this.inputManager.touch);
     this.rotateOverlay = new RotateDeviceOverlay();
     this.debugOverlay = new DebugOverlay();
-    this.startScreen = new StartScreen();
+    this.settingsModal = new SettingsModal();
+    this.soundUnlockPrompt = new SoundUnlockPrompt(this.audioManager);
 
-    this.startScreen.onRide((result: StartScreenResult) => {
-      this.startRide(result.selectedBike, result.selectedQuality);
-    });
+    // Initialize 3D Garage Showroom
+    this.garageController = new GarageController(
+      this.sceneManager.scene,
+      this.sceneManager.canvas,
+      (bike) => {
+        // SYNCHRONOUS AudioContext unlock directly in user click stack
+        this.audioManager.unlock();
+        this.startRide(bike);
+      },
+      () => {
+        this.settingsModal.toggle();
+      }
+    );
 
-    this.hideLoading();
+    this.setupUIHandlers();
+    this.garageController.init();
 
-    // Start render loop immediately for background 3D scene preview
+    // Start render loop
     this.gameLoop = new GameLoop(
       this.sceneManager.engine,
       this.update.bind(this),
       this.render.bind(this)
     );
     this.gameLoop.start();
+  }
+
+  private setupUIHandlers(): void {
+    // Settings changes
+    this.settingsModal.onSettingsChange((state: SettingsState) => {
+      if (state.graphicsQuality !== this.currentGraphicsQuality) {
+        this.currentGraphicsQuality = state.graphicsQuality;
+        this.sceneManager.applyGraphicsPreset(state.graphicsQuality);
+      }
+      this.audioManager.setMasterVolume(state.isMuted ? 0 : state.masterVolume);
+      this.defaultCameraMode = state.defaultCamera;
+      if (this.currentState === 'ride' && this.activeBike) {
+        this.cameraManager.setActiveMode(this.defaultCameraMode, this.activeBike);
+      }
+    });
+
+    // HUD Actions
+    this.hud.onCameraToggle(() => {
+      if (this.activeBike) {
+        this.cameraManager.toggleCamera(this.activeBike);
+      }
+    });
+
+    this.hud.onRecover(() => {
+      this.recoverBike();
+    });
+
+    this.hud.onOpenSettings(() => {
+      this.settingsModal.toggle();
+    });
   }
 
   private createLoadingOverlay(): void {
@@ -95,21 +147,24 @@ export class Game {
     this.loadingOverlay.classList.add('hidden');
   }
 
-  public async startRide(bikeDef: BikeDefinition, quality: GraphicsQuality): Promise<void> {
-    this.currentGraphicsQuality = quality;
-    this.sceneManager.applyGraphicsPreset(quality);
+  public async startRide(bikeDef: BikeDefinition): Promise<void> {
+    this.showLoading(`Preparing ${bikeDef.displayName}...`);
 
-    this.showLoading(`Loading ${bikeDef.displayName}...`);
-
-    // Clean up previous bike if switching
+    // Clean up previous active bike if any
     if (this.loadedBikeData) {
       this.loadedBikeData.rootNode.dispose();
       this.loadedBikeData = null;
       this.activeBike = null;
     }
 
-    // Load selected motorcycle model
     try {
+      // Exit Garage showroom
+      this.garageController.exitGarageMode();
+
+      // Show World proving ground
+      this.world.setVisible(true);
+
+      // Load motorcycle model into world
       this.loadedBikeData = await BikeLoader.loadBike(
         bikeDef,
         this.sceneManager.scene,
@@ -122,37 +177,55 @@ export class Game {
         this.loadedBikeData.visualController
       );
 
-      // Spawn bike at starting grid
+      // Configure Audio Profile
+      if (bikeDef.audioProfile) {
+        this.audioManager.setAudioProfile(bikeDef.audioProfile);
+      }
+
+      // Spawn bike at starting line
       const spawn = this.world.road.getSpawnTransform();
       this.activeBike.reset(spawn.position, spawn.headingRad);
 
-      // Connect camera to bike
-      this.cameraManager.setActiveMode('chase', this.activeBike);
+      // Set active camera
+      this.cameraManager.setActiveMode(this.defaultCameraMode, this.activeBike);
 
-      // Start Audio
-      this.audioManager.unlock();
+      // Transition game state
+      this.currentState = 'ride';
 
-      // Show gameplay UI
+      // Show HUD and Controls
       this.hideLoading();
       this.hud.show();
       this.mobileControls.show();
-
-      // Start Game Loop if not already running
-      if (!this.gameLoop) {
-        this.gameLoop = new GameLoop(
-          this.sceneManager.engine,
-          this.update.bind(this),
-          this.render.bind(this)
-        );
-        this.gameLoop.start();
-      }
     } catch (err) {
-      console.error('Failed to load bike model:', err);
+      console.error('Failed to load ride bike model:', err);
       this.showLoading(`Error loading model. Check console.`);
     }
   }
 
+  public returnToGarage(): void {
+    if (this.currentState === 'garage') return;
+
+    // Dispose ride bike
+    if (this.loadedBikeData) {
+      this.loadedBikeData.rootNode.dispose();
+      this.loadedBikeData = null;
+      this.activeBike = null;
+    }
+
+    this.hud.hide();
+    this.mobileControls.hide();
+    this.world.setVisible(false);
+
+    this.currentState = 'garage';
+    this.garageController.enterGarageMode();
+  }
+
   private update(dt: number): void {
+    if (this.currentState === 'garage') {
+      this.garageController.update(dt);
+      return;
+    }
+
     if (!this.activeBike) return;
 
     this.inputManager.update();

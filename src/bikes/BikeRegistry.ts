@@ -56,10 +56,16 @@ export const S1000RR_2019: BikeDefinition = {
     exhaustNodeName: 'bmws19_exh_1',
   },
   cameraAnchors: {
-    chaseOffset: new Vector3(0, 1.45, 3.8),
-    chaseLookAtOffset: new Vector3(0, 0.85, -1.2),
-    riderEyeOffset: new Vector3(0, 0.94, -0.08),
-    riderLookAtOffset: new Vector3(0, 0.82, -4.5),
+    chaseOffset: new Vector3(0, 1.15, 2.7),
+    chaseLookAtOffset: new Vector3(0, 0.72, -0.8),
+    riderEyeOffset: new Vector3(0, 0.88, -0.05),
+    riderLookAtOffset: new Vector3(0, 0.80, -4.5),
+  },
+  garageCamera: {
+    radius: 2.8,
+    alpha: -Math.PI * 0.35,
+    beta: 1.28,
+    targetOffset: new Vector3(0, 0.52, 0),
   },
 };
 
@@ -115,10 +121,16 @@ export const M1000RR_RACE: BikeDefinition = {
     exhaustNodeName: 'exhaust_1',
   },
   cameraAnchors: {
-    chaseOffset: new Vector3(0, 1.45, 3.8),
-    chaseLookAtOffset: new Vector3(0, 0.85, -1.2),
-    riderEyeOffset: new Vector3(0, 0.94, -0.08),
-    riderLookAtOffset: new Vector3(0, 0.82, -4.5),
+    chaseOffset: new Vector3(0, 1.15, 2.7),
+    chaseLookAtOffset: new Vector3(0, 0.72, -0.8),
+    riderEyeOffset: new Vector3(0, 0.88, -0.05),
+    riderLookAtOffset: new Vector3(0, 0.80, -4.5),
+  },
+  garageCamera: {
+    radius: 2.8,
+    alpha: -Math.PI * 0.35,
+    beta: 1.28,
+    targetOffset: new Vector3(0, 0.52, 0),
   },
 };
 

@@ -11,6 +11,11 @@ export class HUD {
   private brakeFillElem: HTMLElement;
   private cameraBadgeElem: HTMLElement;
   private shiftLightsElem: HTMLElement;
+  private telemetryClusterElem: HTMLElement;
+
+  private onCamClickCallbacks: (() => void)[] = [];
+  private onRecoverClickCallbacks: (() => void)[] = [];
+  private onSettingsClickCallbacks: (() => void)[] = [];
 
   constructor() {
     this.container = document.createElement('div');
@@ -18,19 +23,28 @@ export class HUD {
     this.container.className = 'hud-container hidden';
 
     this.container.innerHTML = `
+      <!-- Top Action Bar -->
       <div class="hud-top-bar">
         <div class="hud-brand">
           <span class="brand-title">RIDELINE</span>
           <span class="brand-sub">PROVING GROUND</span>
         </div>
-        <div class="hud-badges">
-          <span id="hud-cam-badge" class="badge">CHASE POV</span>
-          <span class="badge hint">R: RECOVER BIKE</span>
-          <span class="badge hint">C: CAMERA</span>
+        <div class="hud-top-actions">
+          <button id="hud-cam-badge" class="hud-btn-pill badge" aria-label="Toggle Camera">
+            <span class="cam-icon">📷</span>
+            <span id="hud-cam-label">CHASE POV</span>
+          </button>
+          <button id="hud-btn-recover" class="hud-btn-pill" aria-label="Recover Bike">
+            <span>⟲ RECOVER</span>
+          </button>
+          <button id="hud-btn-settings" class="hud-btn-pill" aria-label="Settings">
+            <span>⚙</span>
+          </button>
         </div>
       </div>
 
-      <div class="hud-telemetry">
+      <!-- Bottom Right Corner Sleek Telemetry Cluster -->
+      <div class="hud-telemetry" id="hud-telemetry-cluster">
         <!-- Tachometer & Shift Lights -->
         <div class="tachometer-wrapper">
           <div class="shift-lights" id="hud-shift-lights">
@@ -82,6 +96,39 @@ export class HUD {
     this.brakeFillElem = document.getElementById('hud-brake-fill')!;
     this.cameraBadgeElem = document.getElementById('hud-cam-badge')!;
     this.shiftLightsElem = document.getElementById('hud-shift-lights')!;
+    this.telemetryClusterElem = document.getElementById('hud-telemetry-cluster')!;
+
+    this.bindEvents();
+  }
+
+  private bindEvents(): void {
+    const camBtn = document.getElementById('hud-cam-badge');
+    const recoverBtn = document.getElementById('hud-btn-recover');
+    const settingsBtn = document.getElementById('hud-btn-settings');
+
+    camBtn?.addEventListener('click', () => {
+      for (const cb of this.onCamClickCallbacks) cb();
+    });
+
+    recoverBtn?.addEventListener('click', () => {
+      for (const cb of this.onRecoverClickCallbacks) cb();
+    });
+
+    settingsBtn?.addEventListener('click', () => {
+      for (const cb of this.onSettingsClickCallbacks) cb();
+    });
+  }
+
+  public onCameraToggle(callback: () => void): void {
+    this.onCamClickCallbacks.push(callback);
+  }
+
+  public onRecover(callback: () => void): void {
+    this.onRecoverClickCallbacks.push(callback);
+  }
+
+  public onOpenSettings(callback: () => void): void {
+    this.onSettingsClickCallbacks.push(callback);
   }
 
   public show(): void {
@@ -107,14 +154,23 @@ export class HUD {
     this.throttleFillElem.style.height = `${(throttle * 100).toFixed(1)}%`;
     this.brakeFillElem.style.height = `${(brake * 100).toFixed(1)}%`;
 
-    // Camera badge
-    this.cameraBadgeElem.textContent = cameraMode === 'chase' ? 'CHASE POV' : 'COCKPIT POV';
-    this.cameraBadgeElem.className = cameraMode === 'cockpit' ? 'badge cockpit' : 'badge';
+    // Camera badge & Cockpit HUD tuning
+    const camLabel = document.getElementById('hud-cam-label');
+    if (cameraMode === 'cockpit') {
+      if (camLabel) camLabel.textContent = 'COCKPIT POV';
+      this.cameraBadgeElem.classList.add('cockpit');
+      // In cockpit mode, make the corner HUD super subtle and compact
+      this.telemetryClusterElem.classList.add('cockpit-mode');
+    } else {
+      if (camLabel) camLabel.textContent = 'CHASE POV';
+      this.cameraBadgeElem.classList.remove('cockpit');
+      this.telemetryClusterElem.classList.remove('cockpit-mode');
+    }
 
-    // Shift lights animation near redline
+    // Shift lights animation
     const leds = this.shiftLightsElem.children;
     for (let i = 0; i < leds.length; i++) {
-      const threshold = 0.70 + (i / leds.length) * 0.28;
+      const threshold = 0.72 + (i / leds.length) * 0.26;
       if (rpmRatio >= threshold) {
         leds[i].classList.add('active');
       } else {
