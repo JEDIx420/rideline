@@ -19,6 +19,9 @@ export class CameraManager {
 
   public setActiveMode(mode: CameraMode, bike?: BikeController): void {
     this.currentMode = mode;
+    if (bike?.rider) {
+      bike.rider.setFirstPerson(mode === 'cockpit');
+    }
     if (mode === 'chase') {
       this.scene.activeCamera = this.chaseCamera.camera;
       if (bike) this.chaseCamera.reset(bike);

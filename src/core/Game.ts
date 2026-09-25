@@ -14,6 +14,8 @@ import { DebugOverlay } from '../debug/DebugOverlay';
 import { GarageController } from '../garage/GarageController';
 import { SettingsModal, SettingsState } from '../ui/SettingsModal';
 import { SoundUnlockPrompt } from '../ui/SoundUnlockPrompt';
+import { RiderController } from '../rider/RiderController';
+import { S1000RR_RIDER_ANCHORS, M1000RR_RIDER_ANCHORS, DEFAULT_RIDER_SUIT } from '../rider/RiderDefinition';
 import { GraphicsQuality } from '../config/graphics';
 
 export type GameState = 'garage' | 'ride';
@@ -151,6 +153,10 @@ export class Game {
     this.showLoading(`Preparing ${bikeDef.displayName}...`);
 
     // Clean up previous active bike if any
+    if (this.activeBike?.rider) {
+      this.activeBike.rider.dispose();
+      this.activeBike.setRider(null);
+    }
     if (this.loadedBikeData) {
       this.loadedBikeData.rootNode.dispose();
       this.loadedBikeData = null;
@@ -176,6 +182,17 @@ export class Game {
         bikeDef,
         this.loadedBikeData.visualController
       );
+
+      // Create & Attach Rider
+      const rider = new RiderController(
+        this.sceneManager.scene,
+        DEFAULT_RIDER_SUIT,
+        this.world.environment.shadowGenerator
+      );
+      const anchors = bikeDef.id === 's1000rr-2019' ? S1000RR_RIDER_ANCHORS : M1000RR_RIDER_ANCHORS;
+      rider.setAttachmentAnchors(anchors);
+      rider.attachToBike(this.activeBike, this.loadedBikeData.rootNode);
+      this.activeBike.setRider(rider);
 
       // Configure Audio Profile
       if (bikeDef.audioProfile) {
@@ -205,7 +222,11 @@ export class Game {
   public returnToGarage(): void {
     if (this.currentState === 'garage') return;
 
-    // Dispose ride bike
+    // Dispose ride bike and rider
+    if (this.activeBike?.rider) {
+      this.activeBike.rider.dispose();
+      this.activeBike.setRider(null);
+    }
     if (this.loadedBikeData) {
       this.loadedBikeData.rootNode.dispose();
       this.loadedBikeData = null;
@@ -251,13 +272,14 @@ export class Game {
       this.debugOverlay.toggle();
     }
 
-    // Step Motorcycle Physics & Visuals
+    // Step Motorcycle Physics & Visuals & Rider
     this.activeBike.update(
       dt,
       input.throttle,
       input.brake,
       input.steer,
-      this.world.road
+      this.world.road,
+      this.world.terrain
     );
 
     // Update Camera

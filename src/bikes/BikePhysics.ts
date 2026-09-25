@@ -2,6 +2,8 @@ import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector';
 import { BikePhysicsConfig } from '../config/physics';
 import { Road } from '../world/Road';
 
+import { Terrain, SurfaceContactInfo } from '../world/Terrain';
+
 export class BikePhysics {
   public position: Vector3 = new Vector3(0, 0, 0);
   public velocity: Vector3 = new Vector3(0, 0, 0);
@@ -12,9 +14,10 @@ export class BikePhysics {
   public leanAngleRad: number = 0; // Roll / lean angle (positive = leaning right)
   public targetLeanRad: number = 0;
   public steerAngleRad: number = 0; // Visual steering angle of front forks
-  public pitchAngleRad: number = 0; // Pitch angle along road incline
+  public pitchAngleRad: number = 0; // Pitch angle along road/surface incline
 
   public suspensionPitch: number = 0; // Dynamic pitch squat/dive
+  public surfaceContact: SurfaceContactInfo | null = null;
 
   private readonly AIR_DENSITY = 1.225; // kg/m^3
   private readonly GRAVITY = 9.81; // m/s^2
@@ -32,6 +35,7 @@ export class BikePhysics {
     this.steerAngleRad = 0;
     this.pitchAngleRad = 0;
     this.suspensionPitch = 0;
+    this.surfaceContact = null;
   }
 
   public update(
@@ -41,8 +45,26 @@ export class BikePhysics {
     steerInput: number, // -1 (left) to +1 (right)
     engineTorqueNm: number,
     totalGearRatio: number,
-    road: Road
+    road: Road,
+    terrain?: Terrain
   ): void {
+    // 0. Surface Contact Detection
+    let surface: SurfaceContactInfo;
+    if (terrain) {
+      surface = terrain.getSurfaceContact(this.position, road);
+    } else {
+      const roadPoint = road.getClosestPoint(this.position);
+      surface = {
+        elevation: roadPoint.position.y,
+        normal: roadPoint.normal,
+        surfaceType: 'asphalt',
+        frictionMultiplier: 1.0,
+        dragMultiplier: 1.0,
+        pitch: roadPoint.pitch,
+      };
+    }
+    this.surfaceContact = surface;
+
     // 1. Longitudinal Forces & Acceleration
     const driveForce = (engineTorqueNm * totalGearRatio) / this.config.wheelRadiusMeters;
     const aeroDrag =
@@ -53,8 +75,8 @@ export class BikePhysics {
       this.speedMps *
       this.speedMps;
     const rollingResistance =
-      this.config.rollingResistance * this.config.massKg * this.GRAVITY;
-    const brakingForce = brake * this.config.massKg * this.config.maxBrakingDecel;
+      this.config.rollingResistance * this.config.massKg * this.GRAVITY * surface.dragMultiplier;
+    const brakingForce = brake * this.config.massKg * this.config.maxBrakingDecel * surface.frictionMultiplier;
 
     let netForce = driveForce - aeroDrag - rollingResistance - (this.speedMps > 0.05 ? brakingForce : 0);
 
@@ -62,6 +84,12 @@ export class BikePhysics {
     if (this.speedMps <= 0.05 && netForce < 0 && throttle === 0) {
       netForce = 0;
       this.speedMps = 0;
+    }
+
+    // Water deceleration
+    if (surface.surfaceType === 'water') {
+      this.speedMps = Math.max(0, this.speedMps - 16.0 * dt);
+      netForce = Math.min(0, netForce);
     }
 
     this.accelerationMps2 = netForce / this.config.massKg;
@@ -72,7 +100,8 @@ export class BikePhysics {
 
     // 2. Lateral Dynamics, Steering & Dynamic Lean
     const speedKmh = this.speedMps * 3.6;
-    const maxLeanRad = (this.config.maxLeanAngleDeg * Math.PI) / 180;
+    const maxLeanDeg = surface.surfaceType === 'offroad' ? Math.min(28, this.config.maxLeanAngleDeg * 0.6) : this.config.maxLeanAngleDeg;
+    const maxLeanRad = (maxLeanDeg * Math.PI) / 180;
 
     // Speed-dependent steering agility & countersteering response
     const speedFactor = Math.min(1.0, this.speedMps / 6.0); // 0 at stop, 1 above 22 km/h
@@ -88,7 +117,7 @@ export class BikePhysics {
     }
 
     // Smooth lean roll transition
-    const leanRate = this.config.leanSpeed * (1.0 + speedFactor * 0.5);
+    const leanRate = this.config.leanSpeed * (1.0 + speedFactor * 0.5) * surface.frictionMultiplier;
     const leanDiff = this.targetLeanRad - this.leanAngleRad;
     this.leanAngleRad += leanDiff * Math.min(1.0, dt * leanRate);
 
@@ -97,7 +126,7 @@ export class BikePhysics {
     if (this.speedMps > 0.5) {
       // Turn radius from lean angle: tan(lean) = v^2 / (g * R) => yawRate = v / R = (g * tan(lean)) / v
       const effectiveLean = this.leanAngleRad;
-      const centripetalYawRate = (this.GRAVITY * Math.tan(effectiveLean)) / Math.max(2.0, this.speedMps);
+      const centripetalYawRate = ((this.GRAVITY * Math.tan(effectiveLean)) / Math.max(2.0, this.speedMps)) * surface.frictionMultiplier;
       // Low speed direct handlebar steering contribution
       const directYawRate = -steerInput * (1.0 - speedFactor) * 1.8;
       yawRate = -centripetalYawRate + directYawRate;
@@ -121,22 +150,19 @@ export class BikePhysics {
     this.position.x += forwardX * this.speedMps * dt;
     this.position.z += forwardZ * this.speedMps * dt;
 
-    // 4. Road Height & Incline Snapping
-    const roadPoint = road.getClosestPoint(this.position);
-    this.position.y = roadPoint.position.y + this.config.wheelRadiusMeters;
-
-    // Compute road pitch along bike forward heading
-    this.pitchAngleRad = roadPoint.pitch;
+    // 4. Surface Elevation & Pitch Snapping
+    this.position.y = surface.elevation + this.config.wheelRadiusMeters;
+    this.pitchAngleRad = surface.pitch;
 
     // 5. Suspension Squat & Dive
-    // Positive acceleration -> rear squat (pitch up), braking -> front dive (pitch down)
     const targetSuspensionPitch = (this.accelerationMps2 / 10.0) * this.config.suspensionStiffness;
     this.suspensionPitch += (targetSuspensionPitch - this.suspensionPitch) * Math.min(1.0, dt * 12.0);
 
     // 6. Soft Road Edge Collision Boundary Check
+    const roadPoint = road.getClosestPoint(this.position);
     const distFromCenter = roadPoint.distanceToCenter;
     const roadHalfWidth = road.width * 0.5 + 2.0; // Road width + gravel shoulder
-    if (distFromCenter > roadHalfWidth) {
+    if (distFromCenter > roadHalfWidth && surface.surfaceType !== 'water') {
       // Off-road drag & mild slide friction
       this.speedMps = Math.max(0, this.speedMps - 8.0 * dt);
       // Gently deflect heading back toward road center

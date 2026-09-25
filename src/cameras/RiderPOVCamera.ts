@@ -10,28 +10,32 @@ export class RiderPOVCamera {
   constructor(private scene: Scene) {
     this.camera = new UniversalCamera('rider_pov_camera', this.currentPos, this.scene);
     this.camera.fov = 1.25; // ~72 degrees wider FOV for immersive cockpit perception
-    this.camera.minZ = 0.05;
+    this.camera.minZ = 0.02;
     this.camera.maxZ = 3500;
   }
 
   public reset(bike: BikeController): void {
-    const anchors = bike.definition.cameraAnchors;
-    const heading = bike.headingRad;
-    const bikePos = bike.position;
+    if (bike.rider) {
+      this.currentPos.copyFrom(bike.rider.getHelmetEyeWorldPosition());
+    } else {
+      const anchors = bike.definition.cameraAnchors;
+      const heading = bike.headingRad;
+      const bikePos = bike.position;
 
-    // Transform local eye offset into world space
-    const forwardX = -Math.sin(heading);
-    const forwardZ = -Math.cos(heading);
-    const rightX = Math.cos(heading);
-    const rightZ = -Math.sin(heading);
+      // Transform local eye offset into world space
+      const forwardX = -Math.sin(heading);
+      const forwardZ = -Math.cos(heading);
+      const rightX = Math.cos(heading);
+      const rightZ = -Math.sin(heading);
 
-    const worldEyePos = new Vector3(
-      bikePos.x + rightX * anchors.riderEyeOffset.x + forwardX * -anchors.riderEyeOffset.z,
-      bikePos.y + anchors.riderEyeOffset.y,
-      bikePos.z + rightZ * anchors.riderEyeOffset.x + forwardZ * -anchors.riderEyeOffset.z
-    );
+      const worldEyePos = new Vector3(
+        bikePos.x + rightX * anchors.riderEyeOffset.x + forwardX * -anchors.riderEyeOffset.z,
+        bikePos.y + anchors.riderEyeOffset.y,
+        bikePos.z + rightZ * anchors.riderEyeOffset.x + forwardZ * -anchors.riderEyeOffset.z
+      );
 
-    this.currentPos.copyFrom(worldEyePos);
+      this.currentPos.copyFrom(worldEyePos);
+    }
     this.camera.position.copyFrom(this.currentPos);
   }
 
@@ -57,14 +61,19 @@ export class RiderPOVCamera {
     // Rider head lean inside into the corner (apex-focused rider posture)
     const riderHeadLeanOffset = lean * 0.12;
 
-    const targetEyePos = new Vector3(
-      bikePos.x + rightX * (anchors.riderEyeOffset.x + riderHeadLeanOffset) + forwardX * -tuckOffsetZ,
-      bikePos.y + tuckOffsetY,
-      bikePos.z + rightZ * (anchors.riderEyeOffset.x + riderHeadLeanOffset) + forwardZ * -tuckOffsetZ
-    );
+    let targetEyePos: Vector3;
+    if (bike.rider) {
+      targetEyePos = bike.rider.getHelmetEyeWorldPosition();
+    } else {
+      targetEyePos = new Vector3(
+        bikePos.x + rightX * (anchors.riderEyeOffset.x + riderHeadLeanOffset) + forwardX * -tuckOffsetZ,
+        bikePos.y + tuckOffsetY,
+        bikePos.z + rightZ * (anchors.riderEyeOffset.x + riderHeadLeanOffset) + forwardZ * -tuckOffsetZ
+      );
+    }
 
     // Fast tight damping for helmet camera
-    this.currentPos = Vector3.Lerp(this.currentPos, targetEyePos, Math.min(1.0, dt * 25.0));
+    this.currentPos = Vector3.Lerp(this.currentPos, targetEyePos, Math.min(1.0, dt * 28.0));
     this.camera.position.copyFrom(this.currentPos);
 
     // Horizon / Head stabilization:

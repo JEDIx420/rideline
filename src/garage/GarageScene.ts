@@ -36,7 +36,7 @@ export class GarageScene {
     try {
       this.studioEnvTexture = new HDRCubeTexture(hdrUrl, this.scene, 512, false, true, false, true);
       this.scene.environmentTexture = this.studioEnvTexture;
-      this.scene.environmentIntensity = 1.0;
+      this.scene.environmentIntensity = 0.70;
     } catch (e) {
       console.warn('Could not load studio HDR map, continuing with standard studio lights:', e);
     }
@@ -49,7 +49,7 @@ export class GarageScene {
       new Vector3(0, 1, 0),
       this.scene
     );
-    this.ambientLight.intensity = 0.45;
+    this.ambientLight.intensity = 0.25;
     this.ambientLight.diffuse = new Color3(0.8, 0.85, 0.95);
     this.ambientLight.groundColor = new Color3(0.08, 0.09, 0.12);
 
@@ -62,7 +62,7 @@ export class GarageScene {
       8,
       this.scene
     );
-    this.keyLight.intensity = 35.0;
+    this.keyLight.intensity = 8.5;
     this.keyLight.diffuse = new Color3(1.0, 0.98, 0.95);
     this.keyLight.specular = new Color3(1.0, 1.0, 1.0);
 
@@ -75,7 +75,7 @@ export class GarageScene {
       10,
       this.scene
     );
-    this.fillLight.intensity = 15.0;
+    this.fillLight.intensity = 3.8;
     this.fillLight.diffuse = new Color3(0.75, 0.85, 1.0);
 
     // Rim Spotlight (rear right high - for dramatic bike silhouette edge)
@@ -87,7 +87,7 @@ export class GarageScene {
       8,
       this.scene
     );
-    this.rimLight.intensity = 40.0;
+    this.rimLight.intensity = 6.5;
     this.rimLight.diffuse = new Color3(0.5, 0.85, 1.0);
 
     // Studio Shadows

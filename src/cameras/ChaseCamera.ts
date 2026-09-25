@@ -8,9 +8,9 @@ export class ChaseCamera {
   private currentPos: Vector3 = new Vector3(0, 3, 5);
   private currentLookAt: Vector3 = new Vector3(0, 0.8, 0);
 
-  private readonly BASE_DIST = 2.7; // Closer, muscular superbike framing
-  private readonly BASE_HEIGHT = 1.15;
-  private readonly BASE_FOV = 0.95; // ~54 degrees
+  private readonly BASE_DIST = 3.2; // Premium superbike + rider framing
+  private readonly BASE_HEIGHT = 1.30;
+  private readonly BASE_FOV = 0.92; // ~52 degrees
 
   constructor(private scene: Scene) {
     this.camera = new UniversalCamera('chase_camera', this.currentPos, this.scene);
@@ -27,7 +27,7 @@ export class ChaseCamera {
     const backZ = Math.cos(heading) * this.BASE_DIST;
 
     this.currentPos.set(bikePos.x + backX, bikePos.y + this.BASE_HEIGHT, bikePos.z + backZ);
-    this.currentLookAt.set(bikePos.x, bikePos.y + 0.78, bikePos.z);
+    this.currentLookAt.set(bikePos.x, bikePos.y + 0.85, bikePos.z);
     this.camera.position.copyFrom(this.currentPos);
     this.camera.setTarget(this.currentLookAt);
   }

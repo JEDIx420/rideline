@@ -38,8 +38,8 @@ export class SceneManager {
     const ipc = this.scene.imageProcessingConfiguration;
     ipc.toneMappingEnabled = true;
     ipc.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES;
-    ipc.exposure = 1.1;
-    ipc.contrast = 1.15;
+    ipc.exposure = 1.0;
+    ipc.contrast = 1.1;
   }
 
   public applyGraphicsPreset(preset: GraphicsQuality): void {

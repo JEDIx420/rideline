@@ -5,12 +5,15 @@ import { EngineModel } from './EngineModel';
 import { Transmission } from './Transmission';
 import { BikeVisualController } from './BikeVisualController';
 import { Road } from '../world/Road';
+import { Terrain } from '../world/Terrain';
+import { RiderController } from '../rider/RiderController';
 
 export class BikeController {
   public physics: BikePhysics;
   public engine: EngineModel;
   public transmission: Transmission;
   public visual: BikeVisualController;
+  public rider: RiderController | null = null;
 
   constructor(
     public definition: BikeDefinition,
@@ -20,6 +23,10 @@ export class BikeController {
     this.engine = new EngineModel(definition.engine);
     this.transmission = new Transmission(definition.transmission);
     this.visual = visualController;
+  }
+
+  public setRider(rider: RiderController | null): void {
+    this.rider = rider;
   }
 
   public reset(spawnPos: Vector3, spawnHeadingRad: number): void {
@@ -33,7 +40,8 @@ export class BikeController {
     throttleInput: number,
     brakeInput: number,
     steerInput: number,
-    road: Road
+    road: Road,
+    terrain?: Terrain
   ): void {
     // 1. Drivetrain & Engine update
     const engagedWheelRpm = this.transmission.calculateRpmFromSpeed(
@@ -68,11 +76,17 @@ export class BikeController {
       steerInput,
       engineTorque,
       totalRatio,
-      road
+      road,
+      terrain
     );
 
     // 4. Visual updates (wheels, forks, roll lean, pitch)
     this.visual.update(dt, this.physics);
+
+    // 5. Rider Posture update
+    if (this.rider) {
+      this.rider.update(dt, this);
+    }
   }
 
   // Telemetry getters
