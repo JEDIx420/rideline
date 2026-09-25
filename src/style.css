@@ -1,0 +1,760 @@
+:root {
+  --bg-dark: #0a0c10;
+  --panel-bg: rgba(14, 18, 24, 0.78);
+  --panel-border: rgba(255, 255, 255, 0.12);
+  --accent-cyan: #00e5ff;
+  --accent-blue: #0070f3;
+  --accent-yellow: #ffb703;
+  --accent-red: #ff334b;
+  --text-main: #f0f3f8;
+  --text-muted: #8a94a6;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: var(--bg-dark);
+  font-family: var(--font-sans);
+  color: var(--text-main);
+  touch-action: none;
+}
+
+#app {
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+  overflow: hidden;
+}
+
+#renderCanvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  outline: none;
+  touch-action: none;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* ==========================================================
+   START SCREEN & BIKE SELECTION
+   ========================================================== */
+.start-screen-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle at center, rgba(16, 22, 32, 0.88) 0%, rgba(8, 10, 14, 0.96) 100%);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 100;
+  padding: 1.5rem;
+}
+
+.start-modal {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 18px;
+  width: 100%;
+  max-width: 820px;
+  max-height: 92vh;
+  overflow-y: auto;
+  padding: 2.2rem;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.logo-section {
+  text-align: center;
+}
+
+.game-logo {
+  font-size: 3rem;
+  font-weight: 900;
+  letter-spacing: 0.35rem;
+  background: linear-gradient(135deg, #ffffff 20%, var(--accent-cyan) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.game-tagline {
+  font-size: 0.95rem;
+  letter-spacing: 0.25rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-top: 0.2rem;
+}
+
+.milestone-pill {
+  display: inline-block;
+  margin-top: 0.6rem;
+  padding: 0.25rem 0.8rem;
+  background: rgba(0, 229, 255, 0.1);
+  border: 1px solid rgba(0, 229, 255, 0.3);
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1rem;
+  color: var(--accent-cyan);
+}
+
+.section-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.12rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-bottom: 0.75rem;
+}
+
+.bike-selector-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1rem;
+}
+
+.bike-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1.5px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 1.2rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.bike-card:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: translateY(-2px);
+}
+
+.bike-card.selected {
+  background: rgba(0, 229, 255, 0.08);
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 20px rgba(0, 229, 255, 0.2);
+}
+
+.bike-card-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.bike-name {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.bike-specs {
+  font-size: 0.82rem;
+  font-family: var(--font-mono);
+  color: var(--accent-cyan);
+  font-weight: 700;
+}
+
+.bike-desc {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.quality-selector-pills {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.quality-pill {
+  flex: 1;
+  min-width: 140px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-muted);
+  border-radius: 8px;
+  padding: 0.65rem 0.8rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.quality-pill:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-main);
+}
+
+.quality-pill.selected {
+  background: rgba(0, 112, 243, 0.2);
+  border-color: var(--accent-blue);
+  color: #ffffff;
+}
+
+.controls-guide {
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 10px;
+  padding: 0.8rem 1.2rem;
+  display: flex;
+  justify-content: space-around;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.guide-col {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.guide-key {
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  padding: 0.15rem 0.45rem;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.action-section {
+  display: flex;
+  justify-content: center;
+}
+
+.btn-ride {
+  width: 100%;
+  max-width: 340px;
+  background: linear-gradient(135deg, var(--accent-cyan) 0%, var(--accent-blue) 100%);
+  border: none;
+  border-radius: 12px;
+  color: #040810;
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: 0.15rem;
+  padding: 1rem 2rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  box-shadow: 0 10px 30px rgba(0, 229, 255, 0.35);
+  transition: all 0.2s ease;
+}
+
+.btn-ride:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 40px rgba(0, 229, 255, 0.5);
+}
+
+/* ==========================================================
+   GAMEPLAY HUD
+   ========================================================== */
+.hud-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  padding: env(safe-area-inset-top, 1.2rem) env(safe-area-inset-right, 1.5rem) env(safe-area-inset-bottom, 1.2rem) env(safe-area-inset-left, 1.5rem);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  z-index: 10;
+}
+
+.hud-top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.hud-brand {
+  display: flex;
+  flex-direction: column;
+}
+
+.brand-title {
+  font-size: 1.15rem;
+  font-weight: 900;
+  letter-spacing: 0.18rem;
+  color: #ffffff;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+}
+
+.brand-sub {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.15rem;
+  color: var(--accent-cyan);
+}
+
+.hud-badges {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.badge {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  backdrop-filter: blur(8px);
+  border-radius: 6px;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08rem;
+  color: var(--text-main);
+}
+
+.badge.cockpit {
+  border-color: var(--accent-yellow);
+  color: var(--accent-yellow);
+}
+
+.badge.hint {
+  color: var(--text-muted);
+}
+
+.hud-telemetry {
+  align-self: flex-end;
+  display: flex;
+  align-items: flex-end;
+  gap: 1.2rem;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  backdrop-filter: blur(10px);
+  border-radius: 14px;
+  padding: 0.9rem 1.4rem;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+}
+
+.tachometer-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 170px;
+}
+
+.shift-lights {
+  display: flex;
+  gap: 4px;
+  justify-content: space-between;
+}
+
+.shift-led {
+  flex: 1;
+  height: 5px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.1);
+  transition: all 0.05s ease;
+}
+
+.shift-led.green.active { background: #00ff66; box-shadow: 0 0 8px #00ff66; }
+.shift-led.yellow.active { background: #ffcc00; box-shadow: 0 0 8px #ffcc00; }
+.shift-led.red.active { background: #ff2244; box-shadow: 0 0 10px #ff2244; }
+
+.rpm-bar-container {
+  width: 100%;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.rpm-bar-fill {
+  height: 100%;
+  width: 10%;
+  background: linear-gradient(90deg, var(--accent-cyan) 0%, var(--accent-yellow) 75%, var(--accent-red) 100%);
+  transition: width 0.05s linear;
+}
+
+.rpm-readout {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-main);
+  text-align: right;
+}
+
+.rpm-readout .unit {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+}
+
+.speed-gear-cluster {
+  display: flex;
+  align-items: baseline;
+  gap: 1.2rem;
+}
+
+.speed-box {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+}
+
+.speed-num {
+  font-family: var(--font-mono);
+  font-size: 3.2rem;
+  font-weight: 900;
+  line-height: 1;
+  color: #ffffff;
+  min-width: 90px;
+  text-align: right;
+}
+
+.speed-unit {
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--text-muted);
+  letter-spacing: 0.05rem;
+}
+
+.gear-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 0.2rem 0.65rem;
+}
+
+.gear-label {
+  font-size: 0.55rem;
+  font-weight: 800;
+  color: var(--text-muted);
+  letter-spacing: 0.05rem;
+}
+
+.gear-num {
+  font-family: var(--font-mono);
+  font-size: 2rem;
+  font-weight: 900;
+  color: var(--accent-cyan);
+  line-height: 1;
+}
+
+.input-meters {
+  display: flex;
+  gap: 0.5rem;
+  height: 55px;
+}
+
+.input-meter {
+  width: 14px;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  overflow: hidden;
+}
+
+.input-meter .meter-fill {
+  width: 100%;
+  height: 0%;
+  transition: height 0.05s ease;
+}
+
+.input-meter.brake .meter-fill {
+  background: var(--accent-red);
+}
+
+.input-meter.throttle .meter-fill {
+  background: var(--accent-cyan);
+}
+
+.meter-label {
+  position: absolute;
+  bottom: 2px;
+  left: 0;
+  width: 100%;
+  text-align: center;
+  font-size: 0.45rem;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* ==========================================================
+   MOBILE CONTROLS (LANDSCAPE)
+   ========================================================== */
+.mobile-controls-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 15;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 1.5rem;
+}
+
+.mobile-steer-cluster {
+  display: flex;
+  gap: 0.8rem;
+  pointer-events: auto;
+}
+
+.mobile-pedal-cluster {
+  display: flex;
+  gap: 0.8rem;
+  pointer-events: auto;
+}
+
+.mobile-center-actions {
+  position: absolute;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 0.6rem;
+  pointer-events: auto;
+}
+
+.touch-btn {
+  background: var(--panel-bg);
+  border: 1.5px solid var(--panel-border);
+  backdrop-filter: blur(8px);
+  color: #ffffff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  cursor: pointer;
+  touch-action: none;
+  transition: transform 0.05s ease, background-color 0.05s ease;
+}
+
+.touch-btn:active, .touch-btn.active {
+  transform: scale(0.92);
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.steer-btn {
+  width: 72px;
+  height: 72px;
+}
+
+.pedal-btn {
+  width: 76px;
+  height: 76px;
+  border-radius: 16px;
+  font-size: 0.85rem;
+  letter-spacing: 0.05rem;
+}
+
+.gas-btn {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+.gas-btn.active {
+  background: rgba(0, 229, 255, 0.3);
+}
+
+.brake-btn {
+  border-color: var(--accent-red);
+  color: var(--accent-red);
+}
+
+.brake-btn.active {
+  background: rgba(255, 51, 75, 0.3);
+}
+
+.action-btn {
+  width: 48px;
+  height: 48px;
+  font-size: 0.7rem;
+}
+
+/* ==========================================================
+   ROTATE DEVICE OVERLAY
+   ========================================================== */
+.rotate-overlay-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: #07090c;
+  z-index: 200;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 2rem;
+  text-align: center;
+}
+
+.rotate-modal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.rotate-phone-icon {
+  color: var(--accent-cyan);
+  animation: rotatePrompt 2s infinite ease-in-out;
+}
+
+@keyframes rotatePrompt {
+  0% { transform: rotate(0deg); }
+  50% { transform: rotate(-90deg); }
+  100% { transform: rotate(0deg); }
+}
+
+.rotate-title {
+  font-size: 1.5rem;
+  font-weight: 900;
+  letter-spacing: 0.15rem;
+  color: #ffffff;
+}
+
+.rotate-desc {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  max-width: 320px;
+}
+
+/* ==========================================================
+   LOADING OVERLAY
+   ========================================================== */
+.loading-overlay-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(8, 10, 14, 0.92);
+  backdrop-filter: blur(10px);
+  z-index: 150;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.loading-box {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 16px;
+  padding: 2.2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  min-width: 300px;
+  text-align: center;
+}
+
+.loading-spinner {
+  width: 44px;
+  height: 44px;
+  border: 3px solid rgba(0, 229, 255, 0.15);
+  border-top-color: var(--accent-cyan);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-title {
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.12rem;
+  color: #ffffff;
+}
+
+.loading-sub {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.loading-bar-wrap {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.loading-bar-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--accent-cyan);
+  transition: width 0.1s ease;
+}
+
+/* ==========================================================
+   DEBUG OVERLAY
+   ========================================================== */
+.debug-overlay {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  background: rgba(0, 0, 0, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 0.7rem 1rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: #c9d1d9;
+  z-index: 50;
+  pointer-events: none;
+}
+
+.debug-title {
+  font-weight: 700;
+  color: var(--accent-cyan);
+  margin-bottom: 0.4rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  padding-bottom: 0.2rem;
+}
+
+.debug-grid {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 0.2rem 0.6rem;
+}
+
+.debug-grid .lbl {
+  color: #8b949e;
+}
+
+.debug-grid .val.good { color: #3fb950; }
+.debug-grid .val.warn { color: #f85149; }
