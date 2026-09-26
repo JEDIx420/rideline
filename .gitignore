@@ -26,4 +26,7 @@ yarn-error.log*
 
 # Raw Source Asset Backups (Preserved locally, runtime files in public/assets/)
 assets-source/
+bike-rider-3d/
+bmw-s1000rr-2019/
+bmw-s1000-rr/
 scratch/

@@ -1,50 +1,53 @@
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 
-export interface RiderAttachmentAnchors {
-  seatPosition: Vector3;       // Pelvis / saddle contact position
-  leftHandPosition: Vector3;   // Left clip-on grip position
-  rightHandPosition: Vector3;  // Right throttle clip-on grip position
-  leftFootPosition: Vector3;   // Left rearset footpeg position
-  rightFootPosition: Vector3;  // Right rearset footpeg position
-  helmetEyeOffset: Vector3;    // Eye-line relative to head center for cockpit POV
+export interface RiderDefinition {
+  id: string;
+  name: string;
+  modelPath: string;
+  modelScale: Vector3;
+  rotationOffset: Vector3;
 }
 
-export interface RiderSuitConfig {
-  primaryColor: string;
-  accentColor: string;
-  trimColor: string;
-  leatherRoughness: number;
-  armorMetallic: number;
-  visorRoughness: number;
-  visorMetallic: number;
-  visorAlpha: number;
-}
-
-export const DEFAULT_RIDER_SUIT: RiderSuitConfig = {
-  primaryColor: '#181c24',    // Dark carbon-black racing leathers
-  accentColor: '#00e5ff',     // Cyan race team stripes
-  trimColor: '#e0e6ed',       // Silver/white accent panels
-  leatherRoughness: 0.65,
-  armorMetallic: 0.85,
-  visorRoughness: 0.05,       // Deep mirror dark iridium visor
-  visorMetallic: 0.95,
-  visorAlpha: 0.96,
+export const CANONICAL_RIDER_DEFINITION: RiderDefinition = {
+  id: 'bike-rider-3d',
+  name: 'Bike Rider 3D',
+  modelPath: 'assets/riders/bike-rider/rider.glb',
+  modelScale: new Vector3(1.0, 1.0, 1.0),
+  rotationOffset: new Vector3(0, 0, 0),
 };
 
-export const S1000RR_RIDER_ANCHORS: RiderAttachmentAnchors = {
-  seatPosition: new Vector3(0, 0.56, 0.05),
-  leftHandPosition: new Vector3(-0.28, 0.88, -0.42),
-  rightHandPosition: new Vector3(0.28, 0.88, -0.42),
-  leftFootPosition: new Vector3(-0.24, 0.42, 0.22),
-  rightFootPosition: new Vector3(0.24, 0.42, 0.22),
-  helmetEyeOffset: new Vector3(0, 0.06, -0.09),
-};
+export const RIDER_BONE_NAMES = {
+  // Core Spine & Head
+  Hips: 'Hips',
+  Spine: 'Spine',
+  Spine1: 'Spine1',
+  Spine2: 'Spine2',
+  Neck: 'Neck',
+  Head: 'Head',
 
-export const M1000RR_RIDER_ANCHORS: RiderAttachmentAnchors = {
-  seatPosition: new Vector3(0, 0.57, 0.05),
-  leftHandPosition: new Vector3(-0.28, 0.88, -0.42),
-  rightHandPosition: new Vector3(0.28, 0.88, -0.42),
-  leftFootPosition: new Vector3(-0.24, 0.42, 0.22),
-  rightFootPosition: new Vector3(0.24, 0.42, 0.22),
-  helmetEyeOffset: new Vector3(0, 0.06, -0.09),
-};
+  // Left Arm
+  LeftShoulder: 'LeftShoulder',
+  LeftArm: 'LeftArm',
+  LeftForeArm: 'LeftForeArm',
+  LeftHand: 'LeftHand',
+
+  // Right Arm
+  RightShoulder: 'RightShoulder',
+  RightArm: 'RightArm',
+  RightForeArm: 'RightForeArm',
+  RightHand: 'RightHand',
+
+  // Left Leg
+  LeftUpLeg: 'LeftUpLeg',
+  LeftLeg: 'LeftLeg',
+  LeftFoot: 'LeftFoot',
+  LeftToeBase: 'LeftToeBase',
+
+  // Right Leg
+  RightUpLeg: 'RightUpLeg',
+  RightLeg: 'RightLeg',
+  RightFoot: 'RightFoot',
+  RightToeBase: 'RightToeBase',
+} as const;
+
+export type RiderBoneKey = keyof typeof RIDER_BONE_NAMES;

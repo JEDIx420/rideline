@@ -21,6 +21,17 @@ RIDELINE is an experimental, non-commercial 3D motorcycle riding simulator proto
 
 ---
 
+## 3D Character / Rider Models
+
+### 1. Bike Rider 3D (Canonical Rider)
+- **Model Name:** Bike Rider 3D
+- **Author / Publisher:** Sketchfab / Ready Player Me
+- **Source:** [Sketchfab - Bike Rider 3D](https://sketchfab.com/3d-models/bike-rider-3d-53590579378a4e83a4597b28a9f43149)
+- **License:** Creative Commons Attribution ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/))
+- **Usage:** Fully rigged and articulated motorcycle rider model with race suit, aerodynamic helmet, riding boots, and procedural riding kinematics.
+
+---
+
 ## Technology Stack
 
 - **Babylon.js**: Apache License 2.0 (Babylon.js Team / Microsoft)

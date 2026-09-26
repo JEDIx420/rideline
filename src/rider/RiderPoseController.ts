@@ -1,47 +1,66 @@
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
-import { RiderRigNodes } from './RiderMeshBuilder';
+import { RiderRig } from './RiderRig';
+import { RiderBikeProfile } from './RiderBikeProfile';
 import { BikeController } from '../bikes/BikeController';
 
 export class RiderPoseController {
-  private currentSpinePitch: number = 0.35; // Default forward lean over tank
-  private currentSpineRoll: number = 0.0;
-  private currentSpineYaw: number = 0.0;
-  private currentHeadPitch: number = -0.25;
-  private currentHeadYaw: number = 0.0;
-  private currentPelvisOffset: Vector3 = new Vector3(0, 0, 0);
+  // Current dynamic posture state
+  public currentSpinePitch: number = 0.42;
+  public currentSpineRoll: number = 0.0;
+  public currentSpineYaw: number = 0.0;
 
-  public update(dt: number, bike: BikeController, rig: RiderRigNodes): void {
+  public currentHeadPitch: number = -0.15;
+  public currentHeadYaw: number = 0.0;
+  public currentHeadRoll: number = 0.0;
+
+  public currentPelvisOffset: Vector3 = new Vector3(0, 0, 0);
+  public currentTuckFactor: number = 0.0;
+
+  public update(
+    dt: number,
+    bike: BikeController,
+    profile: RiderBikeProfile,
+    rig: RiderRig
+  ): void {
     const physics = bike.physics;
     const speedMps = physics.speedMps;
     const speedKmh = speedMps * 3.6;
     const accel = physics.accelerationMps2;
-    const lean = physics.leanAngleRad; // Positive = leaning right, Negative = leaning left
-    const brake = bike.engine.throttle === 0 && physics.speedMps > 5.0 && accel < -2.0 ? Math.min(1.0, -accel / 8.0) : 0;
+    const lean = physics.leanAngleRad; // Negative = left, Positive = right
 
-    // 1. Aerodynamic Tuck State (speed > 160 km/h)
-    const speedTuckFactor = Math.min(1.0, Math.max(0, (speedKmh - 120) / 100)); // 0 at 120km/h, 1 at 220km/h
+    // 1. High-Speed Aerodynamic Tuck (80 km/h to 180+ km/h)
+    const targetTuck = Math.min(1.0, Math.max(0, (speedKmh - 75) / 100)); // 0 at 75km/h, 1 at 175km/h
+    this.currentTuckFactor += (targetTuck - this.currentTuckFactor) * Math.min(1.0, dt * 8.0);
 
-    // 2. Acceleration Pull vs Braking Brace Target Pitch
-    // Base forward lean = ~0.35 rad (~20 deg)
-    // High-speed tuck = up to ~0.72 rad (~41 deg forward crouch)
-    // Hard acceleration = +0.15 rad drop
-    // Hard braking = -0.18 rad rise (bracing arms against deceleration)
-    const targetSpinePitch = 0.35 + speedTuckFactor * 0.38 + (accel > 1.0 ? 0.12 : 0) - (brake > 0.1 ? brake * 0.18 : 0);
+    // 2. Acceleration Pull vs Braking Brace
+    const isBraking = accel < -2.0;
+    const isAccelerating = accel > 2.0;
 
-    // 3. Cornering Hang-off & Apex Glance
-    // Upper body drops inside the corner
-    const targetSpineRoll = -lean * 0.45;
-    const targetSpineYaw = -lean * 0.20;
+    const accelPitchDelta = isAccelerating ? -0.06 * Math.min(1.0, (accel - 2.0) / 6.0) : 0;
+    const brakePitchDelta = isBraking ? +0.08 * Math.min(1.0, Math.abs(accel + 2.0) / 7.0) : 0;
 
-    // Pelvis lateral shift across saddle (subtle body positioning)
-    const targetPelvisX = (lean / ((54 * Math.PI) / 180)) * 0.04;
-    const targetPelvisY = -Math.abs(lean) * 0.02;
+    // 3. Torso Forward Lean Target
+    const basePitch = profile.baseSpinePitch;
+    const tuckPitch = profile.tuckSpinePitch * this.currentTuckFactor;
+    const targetSpinePitch = basePitch + tuckPitch + accelPitchDelta + brakePitchDelta;
 
-    // Head posture: lifts chin when tucked to keep sightline forward down the road, and turns head toward apex exit
-    const targetHeadPitch = -(targetSpinePitch * 0.75) + 0.10;
-    const targetHeadYaw = -lean * 0.35; // Looking through the turn
+    // 4. Cornering Lean & Apex Glance
+    // Torso drops subtly inside the turn
+    const targetSpineRoll = -lean * 0.38;
+    const targetSpineYaw = -lean * 0.16;
 
-    // 4. Smooth Damped Interpolation
+    // Pelvis lateral slide across saddle
+    const maxLeanRad = (48 * Math.PI) / 180;
+    const targetPelvisX = (lean / maxLeanRad) * 0.032;
+    const targetPelvisY = -Math.abs(lean) * 0.015;
+    const targetPelvisZ = this.currentTuckFactor * profile.tuckPelvisOffset.z;
+
+    // Head posture: lift chin when tucked, turn head towards corner exit
+    const targetHeadPitch = -targetSpinePitch * 0.72 + 0.12;
+    const targetHeadYaw = -lean * 0.28;
+    const targetHeadRoll = -targetSpineRoll * 0.50; // Counter-bank head to keep horizon level
+
+    // 5. Smooth Interpolation
     const lerpRate = Math.min(1.0, dt * 14.0);
     this.currentSpinePitch += (targetSpinePitch - this.currentSpinePitch) * lerpRate;
     this.currentSpineRoll += (targetSpineRoll - this.currentSpineRoll) * lerpRate;
@@ -49,46 +68,62 @@ export class RiderPoseController {
 
     this.currentHeadPitch += (targetHeadPitch - this.currentHeadPitch) * lerpRate;
     this.currentHeadYaw += (targetHeadYaw - this.currentHeadYaw) * lerpRate;
+    this.currentHeadRoll += (targetHeadRoll - this.currentHeadRoll) * lerpRate;
 
     this.currentPelvisOffset = Vector3.Lerp(
       this.currentPelvisOffset,
-      new Vector3(targetPelvisX, targetPelvisY, 0),
+      new Vector3(targetPelvisX, targetPelvisY, targetPelvisZ),
       lerpRate
     );
 
-    // 5. Apply Transforms to Skeleton Nodes
-    rig.pelvis.position.x = this.currentPelvisOffset.x;
-    rig.pelvis.position.y = this.currentPelvisOffset.y;
+    // 6. Apply Spine & Head Articulation to Rig
+    // Pelvis
+    rig.setBoneEulerRotation(
+      rig.hips,
+      profile.pelvisRotation.x,
+      profile.pelvisRotation.y + this.currentSpineYaw * 0.3,
+      profile.pelvisRotation.z + this.currentSpineRoll * 0.3
+    );
 
-    // Spine flexion
-    rig.spineLower.rotation.x = this.currentSpinePitch * 0.4;
-    rig.spineLower.rotation.z = this.currentSpineRoll * 0.3;
-    rig.spineLower.rotation.y = this.currentSpineYaw * 0.3;
+    // Progressive Spine curvature (Spine -> Spine1 -> Spine2)
+    const spineSectionPitch = this.currentSpinePitch / 3.0;
+    const spineSectionRoll = this.currentSpineRoll / 3.0;
+    const spineSectionYaw = this.currentSpineYaw / 3.0;
 
-    rig.spineUpper.rotation.x = this.currentSpinePitch * 0.4;
-    rig.spineUpper.rotation.z = this.currentSpineRoll * 0.4;
+    rig.setBoneEulerRotation(rig.spine, spineSectionPitch, spineSectionYaw, spineSectionRoll);
+    rig.setBoneEulerRotation(rig.spine1, spineSectionPitch, spineSectionYaw, spineSectionRoll);
+    rig.setBoneEulerRotation(rig.spine2, spineSectionPitch, spineSectionYaw, spineSectionRoll);
 
-    rig.chest.rotation.x = this.currentSpinePitch * 0.2;
-    rig.chest.rotation.z = this.currentSpineRoll * 0.3;
-    rig.chest.rotation.y = this.currentSpineYaw * 0.4;
+    // Neck & Head: lift chin to look ahead through visor
+    rig.setBoneEulerRotation(rig.neck, -this.currentSpinePitch * 0.40, this.currentHeadYaw * 0.4, this.currentHeadRoll * 0.4);
+    rig.setBoneEulerRotation(rig.head, -this.currentSpinePitch * 0.50, this.currentHeadYaw * 0.6, this.currentHeadRoll * 0.6);
 
-    // Head looking down the road & into apex
-    rig.head.rotation.x = this.currentHeadPitch;
-    rig.head.rotation.y = this.currentHeadYaw;
-    rig.head.rotation.z = -this.currentSpineRoll * 0.25; // Keep horizon relatively level
+    // 7. Base Arm Rest Posture (Sportbike clip-on reach)
+    const armTuckFlex = this.currentTuckFactor * 0.12;
+    // Left Arm
+    rig.setBoneEulerRotation(rig.leftShoulder, 0.08, 0.15, 0);
+    rig.setBoneEulerRotation(rig.leftArm, -0.15, 0.40 + armTuckFlex, 0.70);
+    rig.setBoneEulerRotation(rig.leftForeArm, -0.25, -0.18, 0.60 + armTuckFlex);
+    rig.setBoneEulerRotation(rig.leftHand, 0.20, 0.10, 0);
 
-    // Subtle knee flare on inside leg during cornering
-    if (lean < -0.1) {
-      // Left turn: open left knee
-      rig.hipL.rotation.y = -0.35 * Math.abs(lean);
-      rig.hipR.rotation.y = 0;
-    } else if (lean > 0.1) {
-      // Right turn: open right knee
-      rig.hipR.rotation.y = 0.35 * Math.abs(lean);
-      rig.hipL.rotation.y = 0;
-    } else {
-      rig.hipL.rotation.y = 0;
-      rig.hipR.rotation.y = 0;
-    }
+    // Right Arm
+    rig.setBoneEulerRotation(rig.rightShoulder, 0.08, -0.15, 0);
+    rig.setBoneEulerRotation(rig.rightArm, -0.15, -0.40 - armTuckFlex, -0.70);
+    rig.setBoneEulerRotation(rig.rightForeArm, -0.25, 0.18, -0.60 - armTuckFlex);
+    rig.setBoneEulerRotation(rig.rightHand, 0.20, -0.10, 0);
+
+    // 8. Base Leg Riding Posture (Rearsets & Knee Tank Hug)
+    const kneeAngle = profile.kneeGripAngle;
+    const insideKneeFlare = lean < -0.1 ? -0.25 * Math.abs(lean) : (lean > 0.1 ? 0.25 * Math.abs(lean) : 0);
+
+    // Left Leg: thigh flexed forward, knee bent to rearset
+    rig.setBoneEulerRotation(rig.leftUpLeg, 1.35, -kneeAngle + (lean < -0.1 ? insideKneeFlare : 0), 0.12);
+    rig.setBoneEulerRotation(rig.leftLeg, -1.75, 0.05, 0);
+    rig.setBoneEulerRotation(rig.leftFoot, 0.50, 0.10, 0);
+
+    // Right Leg: thigh flexed forward, knee bent to rearset
+    rig.setBoneEulerRotation(rig.rightUpLeg, 1.35, kneeAngle + (lean > 0.1 ? insideKneeFlare : 0), -0.12);
+    rig.setBoneEulerRotation(rig.rightLeg, -1.75, -0.05, 0);
+    rig.setBoneEulerRotation(rig.rightFoot, 0.50, -0.10, 0);
   }
 }
