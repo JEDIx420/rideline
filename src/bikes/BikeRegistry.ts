@@ -58,11 +58,11 @@ export const S1000RR_2019: BikeDefinition = {
     exhaustNodeName: 'bmws19_exh_1',
   },
   riderAnchors: {
-    seatAnchor: new Vector3(0, 0.264, 0.15),
-    leftGripAnchor: new Vector3(-0.28, 0.406, -0.46),
-    rightGripAnchor: new Vector3(0.28, 0.406, -0.46),
-    leftRearsetAnchor: new Vector3(-0.22, -0.176, 0.28),
-    rightRearsetAnchor: new Vector3(0.22, -0.176, 0.28),
+    seatAnchor: new Vector3(0, 0.355, 0.340),
+    leftGripAnchor: new Vector3(-0.320, 0.345, -0.420),
+    rightGripAnchor: new Vector3(0.320, 0.345, -0.420),
+    leftRearsetAnchor: new Vector3(-0.265, -0.130, 0.315),
+    rightRearsetAnchor: new Vector3(0.265, -0.130, 0.315),
   },
   cameraAnchors: {
     chaseOffset: new Vector3(0, 1.15, 2.7),
@@ -132,11 +132,11 @@ export const M1000RR_RACE: BikeDefinition = {
     exhaustNodeName: 'exhaust_1',
   },
   riderAnchors: {
-    seatAnchor: new Vector3(0, 0.370, 0.14),
-    leftGripAnchor: new Vector3(-0.28, 0.508, -0.46),
-    rightGripAnchor: new Vector3(0.28, 0.508, -0.46),
-    leftRearsetAnchor: new Vector3(-0.22, -0.074, 0.28),
-    rightRearsetAnchor: new Vector3(0.22, -0.074, 0.28),
+    seatAnchor: new Vector3(0, 0.395, 0.340),
+    leftGripAnchor: new Vector3(-0.265, 0.405, -0.450),
+    rightGripAnchor: new Vector3(0.265, 0.405, -0.450),
+    leftRearsetAnchor: new Vector3(-0.254, -0.080, 0.290),
+    rightRearsetAnchor: new Vector3(0.254, -0.080, 0.290),
   },
   cameraAnchors: {
     chaseOffset: new Vector3(0, 1.15, 2.7),

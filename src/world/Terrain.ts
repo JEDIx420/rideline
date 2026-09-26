@@ -6,6 +6,8 @@ import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
 import { Texture } from '@babylonjs/core/Materials/Textures/texture';
 import { Road } from './Road';
 
+import { WorldDirector } from './WorldDirector';
+
 export interface SurfaceContactInfo {
   elevation: number;
   normal: Vector3;
@@ -27,7 +29,7 @@ export class Terrain {
   public terrainMesh: Mesh | null = null;
   public readonly oceanElevation: number = -3.2;
 
-  constructor(private scene: Scene) {
+  constructor(private scene: Scene, public director?: WorldDirector) {
     this.createTerrainMesh();
   }
 
@@ -64,6 +66,10 @@ export class Terrain {
   }
 
   public getSurfaceContact(pos: Vector3, road: Road): SurfaceContactInfo {
+    if (this.director) {
+      return this.director.querySurface(pos);
+    }
+
     const roadPoint = road.getClosestPoint(pos);
     const distToCenter = roadPoint.distanceToCenter;
     const halfWidth = road.width * 0.5; // ~4.5m

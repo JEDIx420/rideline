@@ -126,12 +126,12 @@ export class ModelMaterialLab {
       });
     }
 
-    // Run audit on wheel subtrees
-    this.report = this.auditWheelMaterials(res.meshes);
-    console.log('=== MODEL MATERIAL LAB: WHEEL AUDIT ===\n', JSON.stringify(this.report, null, 2));
+    // Run audit on all submeshes
+    this.report = this.auditAllMaterials(res.meshes);
+    console.log('=== MODEL MATERIAL LAB: FULL AUDIT ===\n', JSON.stringify(this.report, null, 2));
   }
 
-  public auditWheelMaterials(meshes: any[]): WheelMeshReport[] {
+  public auditAllMaterials(meshes: any[]): WheelMeshReport[] {
     const reports: WheelMeshReport[] = [];
 
     const inspectMat = (m: any, mat: any) => {
@@ -171,35 +171,91 @@ export class ModelMaterialLab {
     };
 
     meshes.forEach((m) => {
-      const name = m.name.toLowerCase();
-      if (name.includes('wheel') || name.includes('tire') || name.includes('tyre') || name.includes('rim')) {
-        if (m.material instanceof MultiMaterial) {
-          m.material.subMaterials.forEach((sub: any) => inspectMat(m, sub));
-        } else {
-          inspectMat(m, m.material);
-        }
+      if (m.material instanceof MultiMaterial) {
+        m.material.subMaterials.forEach((sub: any) => inspectMat(m, sub));
+      } else {
+        inspectMat(m, m.material);
       }
     });
 
     return reports;
   }
 
-  public setSideView(): void {
+  public auditWheelMaterials(meshes: any[]): WheelMeshReport[] {
+    return this.auditAllMaterials(meshes).filter((r) => {
+      const name = r.meshName.toLowerCase();
+      return name.includes('wheel') || name.includes('tire') || name.includes('tyre') || name.includes('rim');
+    });
+  }
+
+  public setFrontView(): void {
     this.camera.setTarget(new Vector3(0, 0.55, 0));
-    this.camera.alpha = 0; // Pure side profile view (along X)
+    this.camera.alpha = -Math.PI / 2; // Facing front
+    this.camera.beta = Math.PI / 2.2;
+    this.camera.radius = 2.6;
+    this.resetCameraInertia();
+  }
+
+  public setRearView(): void {
+    this.camera.setTarget(new Vector3(0, 0.55, 0));
+    this.camera.alpha = Math.PI / 2; // Facing rear
+    this.camera.beta = Math.PI / 2.2;
+    this.camera.radius = 2.6;
+    this.resetCameraInertia();
+  }
+
+  public setLeftView(): void {
+    this.camera.setTarget(new Vector3(0, 0.55, 0));
+    this.camera.alpha = Math.PI; // Pure left profile
     this.camera.beta = Math.PI / 2.3;
     this.camera.radius = 2.8;
-    this.camera.inertialAlphaOffset = 0;
-    this.camera.inertialBetaOffset = 0;
-    this.camera.inertialRadiusOffset = 0;
+    this.resetCameraInertia();
+  }
+
+  public setRightView(): void {
+    this.camera.setTarget(new Vector3(0, 0.55, 0));
+    this.camera.alpha = 0; // Pure right profile
+    this.camera.beta = Math.PI / 2.3;
+    this.camera.radius = 2.8;
+    this.resetCameraInertia();
+  }
+
+  public setCockpitView(): void {
+    // Rider cockpit POV overlooking triple clamp, clip-ons, and TFT dash
+    this.camera.setTarget(new Vector3(0, 0.88, -0.22));
+    this.camera.alpha = Math.PI / 2; // Looking forward
+    this.camera.beta = Math.PI / 3.0; // Angled down towards instruments
+    this.camera.radius = 0.65;
+    this.resetCameraInertia();
+  }
+
+  public setRearWheelView(): void {
+    // Focus tightly on rear wheel / tire and swingarm from 3/4 angle
+    this.camera.setTarget(new Vector3(0, 0.35, 0.70));
+    this.camera.alpha = Math.PI * 0.35;
+    this.camera.beta = Math.PI / 2.3;
+    this.camera.radius = 1.25;
+    this.resetCameraInertia();
+  }
+
+  public setExhaustView(): void {
+    // Focus tightly on exhaust silencer, collector, and hanger
+    this.camera.setTarget(new Vector3(0.28, 0.32, 0.40));
+    this.camera.alpha = Math.PI * 0.15;
+    this.camera.beta = Math.PI / 2.4;
+    this.camera.radius = 1.10;
+    this.resetCameraInertia();
+  }
+
+  public setSideView(): void {
+    this.setRightView();
   }
 
   public setRearTyreCloseup(): void {
-    // Focus tightly on rear wheel / tire from 3/4 angle
-    this.camera.setTarget(new Vector3(0, 0.35, 0.72));
-    this.camera.alpha = Math.PI * 0.35;
-    this.camera.beta = Math.PI / 2.3;
-    this.camera.radius = 1.35;
+    this.setRearWheelView();
+  }
+
+  private resetCameraInertia(): void {
     this.camera.inertialAlphaOffset = 0;
     this.camera.inertialBetaOffset = 0;
     this.camera.inertialRadiusOffset = 0;

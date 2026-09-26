@@ -291,6 +291,9 @@ export class Game {
       this.world.terrain
     );
 
+    // Update World procedural streaming corridor (Slow-Roads architecture)
+    this.world.update(this.activeBike.position, dt);
+
     // Update Camera
     this.cameraManager.update(dt, this.activeBike);
 
@@ -322,11 +325,11 @@ export class Game {
 
   public recoverBike(): void {
     if (!this.activeBike) return;
-    const roadPt = this.world.road.getClosestPoint(this.activeBike.position);
-    const tangent = roadPt.tangent;
+    const surfaceQuery = this.world.director.querySurface(this.activeBike.position);
+    const tangent = surfaceQuery.roadTangent;
     const forwardHeading = Math.atan2(-tangent.x, -tangent.z);
 
-    const safeSpawnPos = roadPt.position.clone();
+    const safeSpawnPos = surfaceQuery.recoveryPoint.clone();
     this.activeBike.reset(safeSpawnPos, forwardHeading);
     this.cameraManager.setActiveMode(this.cameraManager.currentMode, this.activeBike);
   }

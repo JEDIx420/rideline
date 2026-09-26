@@ -1,4 +1,4 @@
-import { Vector3 } from '@babylonjs/core/Maths/math.vector';
+import { Vector3, Matrix, Quaternion } from '@babylonjs/core/Maths/math.vector';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { RiderRig, BoneState } from './RiderRig';
 import { RiderBikeProfile } from './RiderBikeProfile';
@@ -27,11 +27,17 @@ export class RiderIK {
     l2: number
   ): void {
     if (!rootBone || !midBone || !endBone) return;
+    if (!rootBone.transformNode || !midBone.transformNode || !endBone.transformNode) return;
 
-    const rootPos = rootBone.transformNode
-      ? rootBone.transformNode.getAbsolutePosition()
-      : rootBone.bone.getAbsolutePosition();
+    const rootTN = rootBone.transformNode;
+    const midTN = midBone.transformNode;
+    const endTN = endBone.transformNode;
 
+    // 1. Maintain exact rest positions on child bones - NEVER translate bones
+    midTN.position.copyFrom(midBone.restPosition);
+    endTN.position.copyFrom(endBone.restPosition);
+
+    const rootPos = rootTN.getAbsolutePosition();
     const toTarget = targetWorldPos.subtract(rootPos);
     const dist = toTarget.length();
     if (dist < 0.001) return;
@@ -58,27 +64,63 @@ export class RiderIK {
     }
     bendNormal.normalize();
 
-    // Bend direction in plane perpendicular to reach vector
+    // In-plane bend direction perpendicular to target reach vector
     const bendDir = Vector3.Cross(bendNormal, dirTarget).normalize();
 
-    // Calculate exact mid joint position (elbow or knee)
-    const midPos = rootPos
-      .add(dirTarget.scale(l1 * Math.cos(alpha)))
-      .add(bendDir.scale(l1 * Math.sin(alpha)));
+    // Desired upper limb direction in world space
+    const d1 = dirTarget.scale(Math.cos(alpha)).add(bendDir.scale(Math.sin(alpha))).normalize();
+    const midPos = rootPos.add(d1.scale(l1));
+    // Desired lower limb direction in world space
+    const d2 = targetWorldPos.subtract(midPos).normalize();
 
-    // Position mid joint
-    if (midBone.transformNode) {
-      midBone.transformNode.setAbsolutePosition(midPos);
-      midBone.transformNode.computeWorldMatrix(true);
+    // 2. Pure Rotational Analytical IK:
+    // Rotate rootBone from its rest direction to d1 in parent space
+    const parentMat = rootTN.parent
+      ? (rootTN.parent as TransformNode).getWorldMatrix()
+      : Matrix.Identity();
+    const invParentMat = parentMat.clone().invert();
+
+    const d1_parent = Vector3.TransformNormal(d1, invParentMat).normalize();
+    const rootRestMat = new Matrix();
+    rootBone.restRotation.toRotationMatrix(rootRestMat);
+    const dir_rest_parent = Vector3.TransformCoordinates(midBone.restPosition, rootRestMat).normalize();
+
+    const dot1 = Math.max(-1, Math.min(1, Vector3.Dot(dir_rest_parent, d1_parent)));
+    const cross1 = Vector3.Cross(dir_rest_parent, d1_parent);
+    let q_aim1: Quaternion;
+    if (dot1 < -0.9999) {
+      const ortho = Vector3.Cross(dir_rest_parent, Vector3.Up()).normalize();
+      q_aim1 = Quaternion.RotationAxis(ortho, Math.PI);
+    } else {
+      q_aim1 = new Quaternion(cross1.x, cross1.y, cross1.z, 1 + dot1).normalize();
     }
 
-    // Position end joint (hand or foot) directly at target
-    if (endBone.transformNode) {
-      const lowerDir = targetWorldPos.subtract(midPos).normalize();
-      const actualEndPos = midPos.add(lowerDir.scale(l2));
-      endBone.transformNode.setAbsolutePosition(actualEndPos);
-      endBone.transformNode.computeWorldMatrix(true);
+    rootTN.rotationQuaternion = q_aim1.multiply(rootBone.restRotation);
+    rootTN.computeWorldMatrix(true);
+    midTN.computeWorldMatrix(true);
+
+    // Rotate midBone from its rest direction to d2 in root space
+    const rootMat = rootTN.getWorldMatrix();
+    const invRootMat = rootMat.clone().invert();
+
+    const d2_root = Vector3.TransformNormal(d2, invRootMat).normalize();
+    const midRestMat = new Matrix();
+    midBone.restRotation.toRotationMatrix(midRestMat);
+    const dir_rest_root = Vector3.TransformCoordinates(endBone.restPosition, midRestMat).normalize();
+
+    const dot2 = Math.max(-1, Math.min(1, Vector3.Dot(dir_rest_root, d2_root)));
+    const cross2 = Vector3.Cross(dir_rest_root, d2_root);
+    let q_aim2: Quaternion;
+    if (dot2 < -0.9999) {
+      const ortho = Vector3.Cross(dir_rest_root, Vector3.Up()).normalize();
+      q_aim2 = Quaternion.RotationAxis(ortho, Math.PI);
+    } else {
+      q_aim2 = new Quaternion(cross2.x, cross2.y, cross2.z, 1 + dot2).normalize();
     }
+
+    midTN.rotationQuaternion = q_aim2.multiply(midBone.restRotation);
+    midTN.computeWorldMatrix(true);
+    endTN.computeWorldMatrix(true);
   }
 
   /**
@@ -153,21 +195,23 @@ export class RiderIK {
 
     // 3. Dynamic Leg Pole Targets (Knees)
     // Inside Knee Flare (track day / MotoGP knee down) + Outside Knee Tank Hug
-    const leftInsideFlare = leanAngleRad < -0.05 ? -0.15 * Math.abs(leanAngleRad) : 0;
-    const leftTankHug = leanAngleRad > 0.05 ? 0.06 * leanAngleRad : 0;
+    const leftInsideFlare = leanAngleRad < -0.05 ? -0.18 * Math.abs(leanAngleRad) : 0;
+    const leftKneeDrop = leanAngleRad < -0.05 ? -0.08 * Math.abs(leanAngleRad) : 0;
+    const leftTankHug = leanAngleRad > 0.05 ? 0.05 * leanAngleRad : 0;
 
-    const rightInsideFlare = leanAngleRad > 0.05 ? 0.15 * leanAngleRad : 0;
-    const rightTankHug = leanAngleRad < -0.05 ? -0.06 * Math.abs(leanAngleRad) : 0;
+    const rightInsideFlare = leanAngleRad > 0.05 ? 0.18 * leanAngleRad : 0;
+    const rightKneeDrop = leanAngleRad > 0.05 ? -0.08 * leanAngleRad : 0;
+    const rightTankHug = leanAngleRad < -0.05 ? -0.05 * Math.abs(leanAngleRad) : 0;
 
     const leftKneeLocal = new Vector3(
-      -0.20 + leftInsideFlare + leftTankHug,
-      0.10,
-      -0.05
+      -0.185 + leftInsideFlare + leftTankHug,
+      0.18 + leftKneeDrop,
+      0.05
     );
     const rightKneeLocal = new Vector3(
-      0.20 + rightInsideFlare + rightTankHug,
-      0.10,
-      -0.05
+      0.185 + rightInsideFlare + rightTankHug,
+      0.18 + rightKneeDrop,
+      0.05
     );
 
     const leftKneePoleWorld = Vector3.TransformCoordinates(leftKneeLocal, bikeWorld);
@@ -195,12 +239,12 @@ export class RiderIK {
       limbLengths.rightShin
     );
 
-    // Foot on Peg Rotations
+    // Foot on Peg Rotations - sole rests securely on rearsets
     if (rig.leftFoot) {
-      rig.setBoneEulerRotation(rig.leftFoot, 0.42, 0.08, 0);
+      rig.setBoneEulerRotation(rig.leftFoot, 0.20, 0.05, 0);
     }
     if (rig.rightFoot) {
-      rig.setBoneEulerRotation(rig.rightFoot, 0.42, -0.08, 0);
+      rig.setBoneEulerRotation(rig.rightFoot, 0.20, -0.05, 0);
     }
   }
 }
