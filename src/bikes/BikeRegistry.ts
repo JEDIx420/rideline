@@ -10,7 +10,8 @@ export const S1000RR_2019: BikeDefinition = {
   description: '999cc inline-four liter-class superbike with BMW ShiftCam variable valve timing. 207 hp, 113 Nm torque, 197 kg curb weight.',
   modelPath: 'assets/bikes/s1000rr-2019/model.glb',
   modelScale: new Vector3(1, 1, 1),
-  modelRotationOffset: new Vector3(0, Math.PI, 0), // Rotate 180° so forward is along -Z
+  // Model source GLB is already forward along -Z (front axle Z = -0.759m, rear axle Z = +0.756m)
+  modelRotationOffset: new Vector3(0, 0, 0),
   modelPositionOffset: new Vector3(0, 0, 0),
   physics: {
     ...DEFAULT_PHYSICS_CONFIG,
@@ -55,6 +56,13 @@ export const S1000RR_2019: BikeDefinition = {
     rearDiscNodeName: 'bikedisc_r',
     exhaustNodeName: 'bmws19_exh_1',
   },
+  riderAnchors: {
+    seatAnchor: new Vector3(0, 0.77, 0.16),
+    leftGripAnchor: new Vector3(-0.27, 0.87, -0.38),
+    rightGripAnchor: new Vector3(0.27, 0.87, -0.38),
+    leftRearsetAnchor: new Vector3(-0.21, 0.42, 0.28),
+    rightRearsetAnchor: new Vector3(0.21, 0.42, 0.28),
+  },
   cameraAnchors: {
     chaseOffset: new Vector3(0, 1.15, 2.7),
     chaseLookAtOffset: new Vector3(0, 0.72, -0.8),
@@ -77,7 +85,8 @@ export const M1000RR_RACE: BikeDefinition = {
   description: 'Homologation special superbike with carbon winglets, race exhaust, and lightened forged internals. 212 hp, 113 Nm, 192 kg.',
   modelPath: 'assets/bikes/bike-02/model.glb',
   modelScale: new Vector3(1, 1, 1),
-  modelRotationOffset: new Vector3(0, Math.PI, 0),
+  // Model source GLB is already forward along -Z (front axle Z = -0.738m, rear axle Z = +0.702m)
+  modelRotationOffset: new Vector3(0, 0, 0),
   modelPositionOffset: new Vector3(0, 0, 0),
   physics: {
     ...DEFAULT_PHYSICS_CONFIG,
@@ -119,6 +128,13 @@ export const M1000RR_RACE: BikeDefinition = {
     frontDiscNodeName: 'bikedisc_f',
     rearDiscNodeName: 'bikedisc_r',
     exhaustNodeName: 'exhaust_1',
+  },
+  riderAnchors: {
+    seatAnchor: new Vector3(0, 0.77, 0.14),
+    leftGripAnchor: new Vector3(-0.27, 0.87, -0.38),
+    rightGripAnchor: new Vector3(0.27, 0.87, -0.38),
+    leftRearsetAnchor: new Vector3(-0.21, 0.42, 0.28),
+    rightRearsetAnchor: new Vector3(0.21, 0.42, 0.28),
   },
   cameraAnchors: {
     chaseOffset: new Vector3(0, 1.15, 2.7),

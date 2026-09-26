@@ -8,12 +8,14 @@ export interface RiderDefinition {
   rotationOffset: Vector3;
 }
 
+export const RIDER_ASSET_YAW_CORRECTION = Math.PI;
+
 export const CANONICAL_RIDER_DEFINITION: RiderDefinition = {
   id: 'bike-rider-3d',
   name: 'Bike Rider 3D',
   modelPath: 'assets/riders/bike-rider/rider.glb',
   modelScale: new Vector3(1.0, 1.0, 1.0),
-  rotationOffset: new Vector3(0, 0, 0),
+  rotationOffset: new Vector3(0, RIDER_ASSET_YAW_CORRECTION, 0),
 };
 
 export const RIDER_BONE_NAMES = {

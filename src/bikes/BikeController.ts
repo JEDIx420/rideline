@@ -7,6 +7,7 @@ import { BikeVisualController } from './BikeVisualController';
 import { Road } from '../world/Road';
 import { Terrain } from '../world/Terrain';
 import { RiderController } from '../rider/RiderController';
+import { LoadedBike } from './BikeLoader';
 
 export class BikeController {
   public physics: BikePhysics;
@@ -14,19 +15,28 @@ export class BikeController {
   public transmission: Transmission;
   public visual: BikeVisualController;
   public rider: RiderController | null = null;
+  public loadedBike: LoadedBike | null = null;
 
   constructor(
     public definition: BikeDefinition,
-    visualController: BikeVisualController
+    visualController: BikeVisualController,
+    loadedBike?: LoadedBike
   ) {
     this.physics = new BikePhysics(definition.physics);
     this.engine = new EngineModel(definition.engine);
     this.transmission = new Transmission(definition.transmission);
     this.visual = visualController;
+    if (loadedBike) {
+      this.loadedBike = loadedBike;
+    }
   }
 
   public setRider(rider: RiderController | null): void {
     this.rider = rider;
+  }
+
+  public setLoadedBike(loaded: LoadedBike): void {
+    this.loadedBike = loaded;
   }
 
   public reset(spawnPos: Vector3, spawnHeadingRad: number): void {
@@ -43,7 +53,17 @@ export class BikeController {
     road: Road,
     terrain?: Terrain
   ): void {
-    // 1. Drivetrain & Engine update
+    // 1. Transmission & Automatic Gear shifting (sequential state machine)
+    this.transmission.update(
+      dt,
+      this.engine.currentRpm,
+      this.physics.speedMps,
+      throttleInput,
+      brakeInput,
+      this.definition.physics.wheelRadiusMeters
+    );
+
+    // 2. Drivetrain & Engine update
     const engagedWheelRpm = this.transmission.calculateRpmFromSpeed(
       this.physics.speedMps,
       this.definition.physics.wheelRadiusMeters
@@ -53,20 +73,13 @@ export class BikeController {
       dt,
       throttleInput,
       engagedWheelRpm,
-      this.transmission.isShifting
-    );
-
-    // 2. Transmission & Automatic Gear shifting
-    this.transmission.update(
-      dt,
-      this.engine.currentRpm,
-      this.physics.speedMps,
-      throttleInput,
-      brakeInput
+      this.transmission.isShifting,
+      this.transmission.isTorqueCut,
+      this.transmission.postShiftTargetRpm
     );
 
     // 3. Physical dynamics
-    const engineTorque = this.engine.getTorque();
+    const engineTorque = this.engine.getTorque(this.transmission.isTorqueCut);
     const totalRatio = this.transmission.getTotalRatio();
 
     this.physics.update(

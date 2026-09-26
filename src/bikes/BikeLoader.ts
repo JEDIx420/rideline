@@ -2,18 +2,30 @@ import { Scene } from '@babylonjs/core/scene';
 import { SceneLoader } from '@babylonjs/core/Loading/sceneLoader';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
+import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
 import '@babylonjs/loaders/glTF'; // Register glTF / GLB loader
 
 import { BikeDefinition } from './BikeDefinition';
 import { BikeVisualController } from './BikeVisualController';
 
+export interface RiderTargetNodes {
+  seatAnchor: TransformNode;
+  leftGripAnchor: TransformNode;
+  rightGripAnchor: TransformNode;
+  leftRearsetAnchor: TransformNode;
+  rightRearsetAnchor: TransformNode;
+}
+
 export interface LoadedBike {
   definition: BikeDefinition;
-  rootNode: TransformNode;
+  physicsRoot: TransformNode;
+  assetRoot: TransformNode;
+  rootNode: TransformNode; // Alias to physicsRoot for backward compatibility
   meshes: AbstractMesh[];
   visualController: BikeVisualController;
   allNodes: Map<string, TransformNode>;
+  riderTargets: RiderTargetNodes;
 }
 
 export class BikeLoader {
@@ -28,9 +40,15 @@ export class BikeLoader {
     const cleanPath = definition.modelPath.replace(/^\//, '');
     const fullModelUrl = baseUrl + cleanPath;
 
-    // Create a container root node for the bike
-    const rootNode = new TransformNode(`bike_root_${definition.id}`, scene);
-    rootNode.scaling.copyFrom(definition.modelScale);
+    // 1. BikePhysicsRoot: pure physics and gameplay transform
+    const physicsRoot = new TransformNode(`bike_physics_root_${definition.id}`, scene);
+
+    // 2. BikeAssetRoot: receives model scale, model rotation offset, and position offset
+    const assetRoot = new TransformNode(`bike_asset_root_${definition.id}`, scene);
+    assetRoot.parent = physicsRoot;
+    assetRoot.scaling.copyFrom(definition.modelScale);
+    assetRoot.rotation.copyFrom(definition.modelRotationOffset);
+    assetRoot.position.copyFrom(definition.modelPositionOffset);
 
     const result = await SceneLoader.ImportMeshAsync(
       '',
@@ -48,13 +66,13 @@ export class BikeLoader {
     const nodeMap = new Map<string, TransformNode>();
     const meshes: AbstractMesh[] = [];
 
-    // Reparent loaded root/top meshes to our rootNode
+    // Reparent loaded top meshes beneath assetRoot
     for (const mesh of result.meshes) {
       meshes.push(mesh);
       nodeMap.set(mesh.name, mesh);
 
       if (!mesh.parent) {
-        mesh.parent = rootNode;
+        mesh.parent = assetRoot;
       }
 
       // Add to shadow caster if shadowGenerator is active
@@ -67,17 +85,81 @@ export class BikeLoader {
     // Collect all transform nodes in hierarchy
     for (const tn of result.transformNodes) {
       nodeMap.set(tn.name, tn);
+      if (!tn.parent) {
+        tn.parent = assetRoot;
+      }
     }
 
+    // 3. RiderTargets under BikePhysicsRoot
+    const riderTargetsRoot = new TransformNode(`rider_targets_${definition.id}`, scene);
+    riderTargetsRoot.parent = physicsRoot;
+
+    const anchors = definition.riderAnchors || {
+      seatAnchor: new Vector3(0, 0.77, 0.16),
+      leftGripAnchor: new Vector3(-0.27, 0.87, -0.38),
+      rightGripAnchor: new Vector3(0.27, 0.87, -0.38),
+      leftRearsetAnchor: new Vector3(-0.21, 0.42, 0.28),
+      rightRearsetAnchor: new Vector3(0.21, 0.42, 0.28),
+    };
+
+    const seatAnchorNode = new TransformNode('seat_anchor', scene);
+    seatAnchorNode.parent = riderTargetsRoot;
+    seatAnchorNode.position.copyFrom(anchors.seatAnchor);
+
+    const leftRearsetNode = new TransformNode('left_rearset_anchor', scene);
+    leftRearsetNode.parent = riderTargetsRoot;
+    leftRearsetNode.position.copyFrom(anchors.leftRearsetAnchor);
+
+    const rightRearsetNode = new TransformNode('right_rearset_anchor', scene);
+    rightRearsetNode.parent = riderTargetsRoot;
+    rightRearsetNode.position.copyFrom(anchors.rightRearsetAnchor);
+
+    // Grip anchors parented to handlebars if available so they steer with forks
+    const handlebarsNode = definition.nodeMapping.handlebarsNodeName
+      ? nodeMap.get(definition.nodeMapping.handlebarsNodeName)
+      : null;
+
+    const leftGripNode = new TransformNode('left_grip_anchor', scene);
+    const rightGripNode = new TransformNode('right_grip_anchor', scene);
+
+    if (handlebarsNode) {
+      leftGripNode.parent = handlebarsNode;
+      // Convert world/bike-local anchor to handlebars local coordinates
+      const invMat = handlebarsNode.getWorldMatrix().clone().invert();
+      const leftWorld = Vector3.TransformCoordinates(anchors.leftGripAnchor, physicsRoot.getWorldMatrix());
+      leftGripNode.position = Vector3.TransformCoordinates(leftWorld, invMat);
+
+      rightGripNode.parent = handlebarsNode;
+      const rightWorld = Vector3.TransformCoordinates(anchors.rightGripAnchor, physicsRoot.getWorldMatrix());
+      rightGripNode.position = Vector3.TransformCoordinates(rightWorld, invMat);
+    } else {
+      leftGripNode.parent = riderTargetsRoot;
+      leftGripNode.position.copyFrom(anchors.leftGripAnchor);
+
+      rightGripNode.parent = riderTargetsRoot;
+      rightGripNode.position.copyFrom(anchors.rightGripAnchor);
+    }
+
+    const riderTargets: RiderTargetNodes = {
+      seatAnchor: seatAnchorNode,
+      leftGripAnchor: leftGripNode,
+      rightGripAnchor: rightGripNode,
+      leftRearsetAnchor: leftRearsetNode,
+      rightRearsetAnchor: rightRearsetNode,
+    };
+
     const visualController = new BikeVisualController(definition);
-    visualController.bindNodes(rootNode, nodeMap);
+    visualController.bindNodes(physicsRoot, nodeMap);
 
     return {
       definition,
-      rootNode,
+      physicsRoot,
+      assetRoot,
+      rootNode: physicsRoot,
       meshes,
       visualController,
       allNodes: nodeMap,
+      riderTargets,
     };
   }
 }

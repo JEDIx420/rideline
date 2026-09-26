@@ -8,9 +8,9 @@ export class ChaseCamera {
   private currentPos: Vector3 = new Vector3(0, 3, 5);
   private currentLookAt: Vector3 = new Vector3(0, 0.8, 0);
 
-  private readonly BASE_DIST = 3.2; // Premium superbike + rider framing
-  private readonly BASE_HEIGHT = 1.30;
-  private readonly BASE_FOV = 0.92; // ~52 degrees
+  private readonly BASE_DIST = 2.85; // Heroic superbike + rider framing
+  private readonly BASE_HEIGHT = 1.20;
+  private readonly BASE_FOV = 0.90; // ~51 degrees
 
   constructor(private scene: Scene) {
     this.camera = new UniversalCamera('chase_camera', this.currentPos, this.scene);
@@ -27,7 +27,7 @@ export class ChaseCamera {
     const backZ = Math.cos(heading) * this.BASE_DIST;
 
     this.currentPos.set(bikePos.x + backX, bikePos.y + this.BASE_HEIGHT, bikePos.z + backZ);
-    this.currentLookAt.set(bikePos.x, bikePos.y + 0.85, bikePos.z);
+    this.currentLookAt.set(bikePos.x, bikePos.y + 0.82, bikePos.z);
     this.camera.position.copyFrom(this.currentPos);
     this.camera.setTarget(this.currentLookAt);
   }
@@ -39,8 +39,8 @@ export class ChaseCamera {
     const speedRatio = Math.min(1.0, speedMps / 75.0); // 0 to 1 up to ~270 km/h
 
     // Dynamic camera distance & height based on speed
-    const dynamicDist = this.BASE_DIST + speedRatio * 0.5;
-    const dynamicHeight = this.BASE_HEIGHT + speedRatio * 0.12;
+    const dynamicDist = this.BASE_DIST + speedRatio * 0.45;
+    const dynamicHeight = this.BASE_HEIGHT + speedRatio * 0.10;
 
     // Camera target behind bike
     const backX = Math.sin(heading) * dynamicDist;
@@ -49,7 +49,7 @@ export class ChaseCamera {
     // Camera lean offset (stabilized roll tracking)
     const rightX = Math.cos(heading);
     const rightZ = -Math.sin(heading);
-    const leanOffset = bike.leanAngleRad * 0.22;
+    const leanOffset = bike.leanAngleRad * 0.18;
 
     const targetPos = new Vector3(
       bikePos.x + backX + rightX * leanOffset,
@@ -57,13 +57,13 @@ export class ChaseCamera {
       bikePos.z + backZ + rightZ * leanOffset
     );
 
-    // LookAt position ahead of bike
-    const forwardX = -Math.sin(heading) * 1.2;
-    const forwardZ = -Math.cos(heading) * 1.2;
+    // LookAt position ahead of bike, slightly shifted with lean
+    const forwardX = -Math.sin(heading) * 1.5;
+    const forwardZ = -Math.cos(heading) * 1.5;
     const targetLookAt = new Vector3(
-      bikePos.x + forwardX,
-      bikePos.y + 0.78,
-      bikePos.z + forwardZ
+      bikePos.x + forwardX + rightX * (leanOffset * 0.6),
+      bikePos.y + 0.82,
+      bikePos.z + forwardZ + rightZ * (leanOffset * 0.6)
     );
 
     // Smooth position and look-at damping
@@ -76,7 +76,11 @@ export class ChaseCamera {
     this.camera.position.copyFrom(this.currentPos);
     this.camera.setTarget(this.currentLookAt);
 
+    // Dynamic bank roll angle with bike lean
+    const rollAngle = -bike.leanAngleRad * 0.16;
+    this.camera.upVector = new Vector3(-Math.sin(rollAngle), Math.cos(rollAngle), 0);
+
     // Dynamic speed FOV sensation
-    this.camera.fov = this.BASE_FOV + speedRatio * 0.16;
+    this.camera.fov = this.BASE_FOV + speedRatio * 0.14;
   }
 }

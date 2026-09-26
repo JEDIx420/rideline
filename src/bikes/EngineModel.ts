@@ -1,37 +1,80 @@
 import { EngineConfig } from './BikeDefinition';
 
+export type EngineLifecycleState = 'OFF' | 'STARTING' | 'IDLING' | 'RUNNING';
+
 export class EngineModel {
   public currentRpm: number;
   public throttle: number = 0;
   public isAtLimiter: boolean = false;
+  public state: EngineLifecycleState = 'RUNNING';
+
   private limiterTimer: number = 0;
+  private idlePhase: number = 0;
+  private startTimer: number = 0;
 
   constructor(private config: EngineConfig) {
     this.currentRpm = config.idleRpm;
   }
 
   public reset(): void {
+    this.state = 'RUNNING';
     this.currentRpm = this.config.idleRpm;
     this.throttle = 0;
     this.isAtLimiter = false;
     this.limiterTimer = 0;
+    this.idlePhase = 0;
+    this.startTimer = 0;
+  }
+
+  public startEngine(): void {
+    this.state = 'STARTING';
+    this.startTimer = 0.45; // 450ms starter motor crank
+    this.currentRpm = 350;
   }
 
   /**
-   * Updates RPM based on throttle, wheel speed feedback, and clutch engagement
+   * Updates RPM based on throttle, wheel speed feedback, transmission shift state, and lifecycle
    */
   public update(
     dt: number,
     throttleInput: number,
     engagedWheelRpm: number | null,
-    isClutchDisengaged: boolean = false
+    isShifting: boolean = false,
+    isTorqueCut: boolean = false,
+    postShiftTargetRpm: number = 0
   ): void {
     this.throttle = Math.max(0, Math.min(1, throttleInput));
+    this.idlePhase += dt;
 
-    // Handle soft rev limiter bouncing at redline
+    // 1. Engine Lifecycle State Machine
+    if (this.state === 'OFF') {
+      this.currentRpm = Math.max(0, this.currentRpm - 2500 * dt);
+      return;
+    }
+
+    if (this.state === 'STARTING') {
+      this.startTimer -= dt;
+      // Starter motor cranking sound/RPM
+      this.currentRpm = 400 + Math.sin(this.idlePhase * 25) * 60;
+      if (this.startTimer <= 0) {
+        // Engine catches and flares to idle
+        this.state = 'IDLING';
+        this.currentRpm = this.config.idleRpm + 600;
+      }
+      return;
+    }
+
+    // 2. Realistic Idle Variation (combustion irregularity)
+    const idleFlutter =
+      Math.sin(this.idlePhase * 18.0) * 16.0 +
+      Math.cos(this.idlePhase * 37.0) * 12.0 +
+      (Math.random() - 0.5) * 8.0;
+    const baseIdleRpm = this.config.idleRpm + idleFlutter;
+
+    // 3. Rev limiter bouncing at redline
     if (this.currentRpm >= this.config.redlineRpm) {
       this.limiterTimer += dt;
-      if (this.limiterTimer > 0.04) {
+      if (this.limiterTimer > 0.035) {
         this.isAtLimiter = true;
         this.limiterTimer = 0;
       }
@@ -40,20 +83,29 @@ export class EngineModel {
       this.limiterTimer = 0;
     }
 
-    if (isClutchDisengaged || engagedWheelRpm === null) {
-      // Neutral / clutch disengaged rev response
-      const targetFreeRpm = this.isAtLimiter
-        ? this.config.redlineRpm - 350
-        : this.config.idleRpm + this.throttle * (this.config.maxRpm - this.config.idleRpm);
+    // 4. Upshift torque cut RPM drop
+    if (isShifting && isTorqueCut && postShiftTargetRpm > 0) {
+      // Rapidly drop RPM to target higher-gear RPM during quickshifter ignition cut
+      const dropRate = Math.min(1.0, dt * 18.0);
+      this.currentRpm = this.currentRpm + (postShiftTargetRpm - this.currentRpm) * dropRate;
+      return;
+    }
 
-      const revSpeed = this.throttle > 0.1 ? 28000 : 12000;
+    // 5. Engaged vs Disengaged Drivetrain RPM
+    if (engagedWheelRpm === null || engagedWheelRpm < baseIdleRpm * 0.5) {
+      // Neutral / clutch disengaged rev response (blip throttle at standstill)
+      const targetFreeRpm = this.isAtLimiter
+        ? this.config.redlineRpm - 400
+        : baseIdleRpm + this.throttle * (this.config.maxRpm - baseIdleRpm);
+
+      const revSpeed = this.throttle > 0.05 ? 32000 : 9000;
       const rpmDelta = (targetFreeRpm - this.currentRpm) * (dt * revSpeed / 1000);
-      this.currentRpm = Math.max(this.config.idleRpm, this.currentRpm + rpmDelta);
+      this.currentRpm = Math.max(baseIdleRpm, this.currentRpm + rpmDelta);
     } else {
       // Direct drivetrain coupling to rear wheel
-      const targetEngagedRpm = Math.max(this.config.idleRpm, engagedWheelRpm);
+      const targetEngagedRpm = Math.max(baseIdleRpm, engagedWheelRpm);
 
-      // Smooth RPM lag/coupling to simulate flywheel inertia
+      // Smooth RPM coupling to simulate flywheel inertia
       const blend = Math.min(1.0, dt * (1.0 / this.config.flywheelInertia));
       this.currentRpm = this.currentRpm + (targetEngagedRpm - this.currentRpm) * blend;
 
@@ -62,15 +114,22 @@ export class EngineModel {
       }
     }
 
-    // Hard clamps
-    this.currentRpm = Math.max(this.config.idleRpm, Math.min(this.config.maxRpm, this.currentRpm));
+    // Idle vs Running state update
+    if (this.currentRpm > this.config.idleRpm + 400 || this.throttle > 0.05) {
+      this.state = 'RUNNING';
+    } else {
+      this.state = 'IDLING';
+    }
+
+    // Clamps
+    this.currentRpm = Math.max(this.config.idleRpm * 0.8, Math.min(this.config.maxRpm, this.currentRpm));
   }
 
   /**
    * Computes engine output torque in Nm for the current RPM and throttle
    */
-  public getTorque(): number {
-    if (this.isAtLimiter) {
+  public getTorque(isTorqueCut: boolean = false): number {
+    if (this.isAtLimiter || isTorqueCut || this.state === 'OFF' || this.state === 'STARTING') {
       return 0;
     }
 

@@ -25,7 +25,7 @@ export const S1000RR_RIDER_PROFILE: RiderBikeProfile = {
   leftFootTarget: new Vector3(-0.23, 0.40, 0.24),
   rightFootTarget: new Vector3(0.23, 0.40, 0.24),
   kneeGripAngle: 0.18,
-  headCameraOffset: new Vector3(0, 0.18, -0.54),
+  headCameraOffset: new Vector3(0, -0.12, 0.12),
   tuckSpinePitch: 0.32,
   tuckPelvisOffset: new Vector3(0, -0.03, 0.04),
 };
@@ -40,7 +40,7 @@ export const M1000RR_RIDER_PROFILE: RiderBikeProfile = {
   leftFootTarget: new Vector3(-0.23, 0.41, 0.24),
   rightFootTarget: new Vector3(0.23, 0.41, 0.24),
   kneeGripAngle: 0.18,
-  headCameraOffset: new Vector3(0, 0.18, -0.54),
+  headCameraOffset: new Vector3(0, -0.12, 0.12),
   tuckSpinePitch: 0.32,
   tuckPelvisOffset: new Vector3(0, -0.03, 0.04),
 };

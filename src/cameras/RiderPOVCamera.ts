@@ -81,22 +81,20 @@ export class RiderPOVCamera {
     const stabilizedRoll = -lean * 0.22;
     const stabilizedPitch = pitch * 0.65;
 
-    // Look-at point far ahead along road + apex glance into turns
-    const lookDist = 25.0;
-    const apexGlanceX = rightX * (lean * 4.0);
-    const apexGlanceZ = rightZ * (lean * 4.0);
+    // Look-at point ahead along road + apex glance into turns, looking down towards road, windscreen and handlebars
+    const lookDist = 15.0;
+    const apexGlanceX = rightX * (lean * 3.5);
+    const apexGlanceZ = rightZ * (lean * 3.5);
 
     const targetLookAt = new Vector3(
       targetEyePos.x + forwardX * lookDist + apexGlanceX,
-      targetEyePos.y + Math.sin(stabilizedPitch) * lookDist - 0.2,
+      targetEyePos.y + Math.sin(stabilizedPitch) * lookDist - 1.6,
       targetEyePos.z + forwardZ * lookDist + apexGlanceZ
     );
 
     this.camera.setTarget(targetLookAt);
 
-    // Apply stabilized roll rotation
-    const rot = this.camera.rotation;
-    rot.z = stabilizedRoll;
-    this.camera.rotation = rot;
+    // Apply stabilized roll rotation via upVector
+    this.camera.upVector = new Vector3(-Math.sin(stabilizedRoll), Math.cos(stabilizedRoll), 0);
   }
 }

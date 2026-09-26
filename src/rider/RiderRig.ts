@@ -13,11 +13,37 @@ export interface BoneState {
   restRotation: Quaternion;
 }
 
+export interface RiderLimbLengths {
+  leftUpperArm: number;
+  leftForearm: number;
+  rightUpperArm: number;
+  rightForearm: number;
+  leftThigh: number;
+  leftShin: number;
+  rightThigh: number;
+  rightShin: number;
+}
+
 export class RiderRig {
   public rootNode: TransformNode;
   public skeleton: Skeleton;
   public meshes: AbstractMesh[];
   public bones: Map<string, BoneState> = new Map();
+
+  // Derived limb lengths from skeleton
+  public limbLengths: RiderLimbLengths = {
+    leftUpperArm: 0.285,
+    leftForearm: 0.252,
+    rightUpperArm: 0.285,
+    rightForearm: 0.252,
+    leftThigh: 0.458,
+    leftShin: 0.444,
+    rightThigh: 0.458,
+    rightShin: 0.444,
+  };
+
+  // Bind pose Hips position relative to RiderAssetRoot
+  public hipsBindLocalPosition: Vector3 = new Vector3(0, 1.019, 0.010);
 
   // Primary bone fast references
   public hips: BoneState | null = null;
@@ -108,6 +134,33 @@ export class RiderRig {
     this.rightLeg = this.getBone(RIDER_BONE_NAMES.RightLeg);
     this.rightFoot = this.getBone(RIDER_BONE_NAMES.RightFoot);
     this.rightToeBase = this.getBone(RIDER_BONE_NAMES.RightToeBase);
+
+    // Derive bind-pose Hips position
+    if (this.hips) {
+      this.hipsBindLocalPosition.copyFrom(this.hips.restPosition);
+    }
+
+    // Derive limb lengths from skeleton rest poses
+    this.deriveLimbLengths();
+  }
+
+  private deriveLimbLengths(): void {
+    const getDist = (b: BoneState | null, fallback: number) => {
+      if (!b) return fallback;
+      const len = b.restPosition.length();
+      return len > 0.05 ? len : fallback;
+    };
+
+    this.limbLengths = {
+      leftUpperArm: getDist(this.leftForeArm, 0.285),
+      leftForearm: getDist(this.leftHand, 0.252),
+      rightUpperArm: getDist(this.rightForeArm, 0.285),
+      rightForearm: getDist(this.rightHand, 0.252),
+      leftThigh: getDist(this.leftLeg, 0.458),
+      leftShin: getDist(this.leftFoot, 0.444),
+      rightThigh: getDist(this.rightLeg, 0.458),
+      rightShin: getDist(this.rightFoot, 0.444),
+    };
   }
 
   private cacheMeshes(): void {
@@ -178,7 +231,9 @@ export class RiderRig {
   }
 
   public setFirstPersonMode(isFirstPerson: boolean): void {
-    for (const mesh of this.meshes) {
+    // Selectively cull helmet/head/teeth/eyes so interior polys aren't visible,
+    // while keeping suit, arms, gloves, boots visible in cockpit view!
+    for (const mesh of this.headMeshes) {
       mesh.setEnabled(!isFirstPerson);
     }
   }

@@ -58,7 +58,8 @@ export class DebugOverlay {
         <span class="lbl">Motorcycle:</span> <span class="val">${bike.definition.displayName}</span>
         <span class="lbl">Speed:</span> <span class="val">${bike.speedKmh.toFixed(1)} km/h (${bike.physics.speedMps.toFixed(1)} m/s)</span>
         <span class="lbl">RPM:</span> <span class="val">${Math.round(bike.currentRpm)} / ${bike.redlineRpm}</span>
-        <span class="lbl">Gear:</span> <span class="val">${bike.currentGear}</span>
+        <span class="lbl">Gear:</span> <span class="val">${bike.currentGear} (${bike.transmission.shiftState})</span>
+        <span class="lbl">Shift Hold:</span> <span class="val">${(bike.transmission.timeSinceLastShiftSec * 1000).toFixed(0)}ms (Target: ${Math.round(bike.transmission.postShiftTargetRpm)} RPM)</span>
         <span class="lbl">Lean Angle:</span> <span class="val">${((bike.leanAngleRad * 180) / Math.PI).toFixed(1)}&deg;</span>
         <span class="lbl">Steer Angle:</span> <span class="val">${((bike.physics.steerAngleRad * 180) / Math.PI).toFixed(1)}&deg;</span>
         <span class="lbl">Position:</span> <span class="val">[${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}, ${pos.z.toFixed(1)}]</span>

@@ -1,19 +1,26 @@
 import { Scene } from '@babylonjs/core/scene';
+import { Vector3 } from '@babylonjs/core/Maths/math.vector';
+import { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
 import { GarageScene } from './GarageScene';
 import { GarageCamera } from './GarageCamera';
 import { GarageUI } from './GarageUI';
 import { BikeDefinition } from '../bikes/BikeDefinition';
 import { BikeLoader, LoadedBike } from '../bikes/BikeLoader';
-import { BikeRegistry } from '../bikes/BikeRegistry';
+import { S1000RR_2019, M1000RR_RACE } from '../bikes/BikeRegistry';
 
 export class GarageController {
   public garageScene: GarageScene;
   public garageCamera: GarageCamera;
   public garageUI: GarageUI;
 
-  public loadedShowroomBike: LoadedBike | null = null;
-  private isTransitioning: boolean = false;
-  private isFirstLoad: boolean = true;
+  // Two physical garage bays
+  public bay1Bike: LoadedBike | null = null;
+  public bay2Bike: LoadedBike | null = null;
+
+  public readonly BAY_1_POS: Vector3 = new Vector3(-1.85, 0, 0);
+  public readonly BAY_2_POS: Vector3 = new Vector3(1.85, 0, 0);
+
+  private selectedBikeDef: BikeDefinition = S1000RR_2019;
 
   constructor(
     private scene: Scene,
@@ -31,7 +38,7 @@ export class GarageController {
 
   private bindEvents(): void {
     this.garageUI.onSelectBike((bike) => {
-      this.loadShowroomBike(bike);
+      this.focusBike(bike);
     });
 
     this.garageUI.onRide((bike) => {
@@ -44,47 +51,74 @@ export class GarageController {
   }
 
   public async init(): Promise<void> {
-    const initialBike = this.garageUI.getSelectedBike() || BikeRegistry.getDefaultBike();
-    this.updateInitialLoader(10, `DOWNLOADING ${initialBike.displayName.toUpperCase()}...`);
-    await this.loadShowroomBike(initialBike);
-    this.dismissInitialLoader();
-    this.isFirstLoad = false;
+    this.updateInitialLoader(10, 'PREPARING WORKSHOP...');
+
+    // Load both canonical motorcycles into their respective garage bays
+    try {
+      this.updateInitialLoader(25, `PARKING ${S1000RR_2019.displayName.toUpperCase()} IN BAY 1...`);
+      this.bay1Bike = await BikeLoader.loadBike(
+        S1000RR_2019,
+        this.scene,
+        this.garageScene.shadowGenerator
+      );
+      this.alignBikeToFloor(this.bay1Bike, this.BAY_1_POS, -0.15, 0.546);
+
+      this.updateInitialLoader(65, `PARKING ${M1000RR_RACE.displayName.toUpperCase()} IN BAY 2...`);
+      this.bay2Bike = await BikeLoader.loadBike(
+        M1000RR_RACE,
+        this.scene,
+        this.garageScene.shadowGenerator
+      );
+      this.alignBikeToFloor(this.bay2Bike, this.BAY_2_POS, 0.15, 0.444);
+
+      // Focus Bay 1 initially
+      this.selectedBikeDef = S1000RR_2019;
+      this.garageCamera.setHeroAngle(new Vector3(this.BAY_1_POS.x, 0.65, this.BAY_1_POS.z));
+    } catch (err) {
+      console.error('Failed to populate garage bays:', err);
+    } finally {
+      this.dismissInitialLoader();
+    }
   }
 
-  public async loadShowroomBike(bikeDef: BikeDefinition): Promise<void> {
-    if (this.isTransitioning) return;
-    this.isTransitioning = true;
-
-    // Clean up current showroom bike
-    if (this.loadedShowroomBike) {
-      this.loadedShowroomBike.rootNode.dispose();
-      this.loadedShowroomBike = null;
+  private alignBikeToFloor(
+    bike: LoadedBike,
+    bayCenter: Vector3,
+    yawAngleRad: number,
+    calibratedGroundY: number
+  ): void {
+    // Dynamic minimum vertex ground calculation with fallback to calibrated value
+    let groundOffset = calibratedGroundY;
+    const lowestY = this.computeLowestVertexY(bike.meshes);
+    if (lowestY !== null && isFinite(lowestY)) {
+      groundOffset = -lowestY;
     }
 
-    try {
-      this.loadedShowroomBike = await BikeLoader.loadBike(
-        bikeDef,
-        this.scene,
-        this.garageScene.shadowGenerator,
-        (pct) => {
-          if (this.isFirstLoad) {
-            const mappedPct = Math.min(98, Math.max(10, Math.floor(10 + pct * 0.88)));
-            this.updateInitialLoader(mappedPct, `LOADING ${bikeDef.displayName.toUpperCase()} (${pct}%)...`);
-          }
-        }
-      );
+    bike.physicsRoot.position.set(bayCenter.x, groundOffset, bayCenter.z);
+    bike.physicsRoot.rotation.set(0, yawAngleRad, 0);
+  }
 
-      // Place bike centered on showroom pedestal
-      const pos = bikeDef.modelPositionOffset || { x: 0, y: 0.08, z: 0 };
-      this.loadedShowroomBike.rootNode.position.set(pos.x, pos.y + 0.08, pos.z);
-      this.loadedShowroomBike.rootNode.rotation.set(0, -Math.PI * 0.25, 0); // Hero 45-deg angle
-    } catch (err) {
-      console.error('Failed to load showroom bike:', err);
-      if (this.isFirstLoad) {
-        this.updateInitialLoader(100, 'ERROR LOADING 3D MODEL. CHECK NETWORK.');
+  private computeLowestVertexY(meshes: AbstractMesh[]): number | null {
+    let minY = Infinity;
+    for (const mesh of meshes) {
+      if (mesh.getTotalVertices() > 0) {
+        mesh.computeWorldMatrix(true);
+        const bInfo = mesh.getBoundingInfo();
+        const worldMinY = bInfo.boundingBox.minimumWorld.y;
+        if (worldMinY < minY) {
+          minY = worldMinY;
+        }
       }
-    } finally {
-      this.isTransitioning = false;
+    }
+    return isFinite(minY) ? minY : null;
+  }
+
+  public focusBike(bikeDef: BikeDefinition): void {
+    this.selectedBikeDef = bikeDef;
+    if (bikeDef.id === S1000RR_2019.id) {
+      this.garageCamera.dollyToBay(new Vector3(this.BAY_1_POS.x, 0.65, this.BAY_1_POS.z));
+    } else {
+      this.garageCamera.dollyToBay(new Vector3(this.BAY_2_POS.x, 0.65, this.BAY_2_POS.z));
     }
   }
 
@@ -99,7 +133,7 @@ export class GarageController {
   }
 
   public dismissInitialLoader(): void {
-    this.updateInitialLoader(100, 'SHOWROOM READY');
+    this.updateInitialLoader(100, 'RIDELINE WORKSHOP READY');
     const loader = document.getElementById('rideline-initial-loader');
     if (loader) {
       setTimeout(() => {
@@ -117,11 +151,11 @@ export class GarageController {
     this.garageScene.setVisible(true);
     this.garageUI.show();
     this.garageCamera.attachControl();
-    this.garageCamera.setHeroAngle();
 
-    if (this.loadedShowroomBike) {
-      this.loadedShowroomBike.rootNode.setEnabled(true);
-    }
+    if (this.bay1Bike) this.bay1Bike.physicsRoot.setEnabled(true);
+    if (this.bay2Bike) this.bay2Bike.physicsRoot.setEnabled(true);
+
+    this.focusBike(this.selectedBikeDef);
   }
 
   public exitGarageMode(): void {
@@ -129,18 +163,16 @@ export class GarageController {
     this.garageUI.hide();
     this.garageScene.setVisible(false);
 
-    if (this.loadedShowroomBike) {
-      this.loadedShowroomBike.rootNode.dispose();
-      this.loadedShowroomBike = null;
-    }
+    // Hide bikes in garage while riding on road
+    if (this.bay1Bike) this.bay1Bike.physicsRoot.setEnabled(false);
+    if (this.bay2Bike) this.bay2Bike.physicsRoot.setEnabled(false);
   }
 
   public dispose(): void {
     this.garageCamera.dispose();
     this.garageUI.dispose();
     this.garageScene.dispose();
-    if (this.loadedShowroomBike) {
-      this.loadedShowroomBike.rootNode.dispose();
-    }
+    this.bay1Bike?.physicsRoot.dispose();
+    this.bay2Bike?.physicsRoot.dispose();
   }
 }

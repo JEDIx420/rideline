@@ -11,6 +11,7 @@ import { InstancedMesh } from '@babylonjs/core/Meshes/instancedMesh';
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { HDRCubeTexture } from '@babylonjs/core/Materials/Textures/hdrCubeTexture';
+import { SceneLoader } from '@babylonjs/core/Loading/sceneLoader';
 import { GraphicsSettings } from '../config/graphics';
 import { Road } from './Road';
 
@@ -173,54 +174,76 @@ export class Environment {
     this.guardrailMeshes.push(railMesh);
   }
 
-  private setupProps(): void {
+  private async setupProps(): Promise<void> {
     const density = this.graphics.environmentDensity;
     const splinePoints = this.road.getSplinePoints();
     const n = splinePoints.length;
+    const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, '') + '/';
 
-    // Pine Tree Prototype
-    const trunk = MeshBuilder.CreateCylinder(
-      'proto_trunk',
-      { height: 2.5, diameter: 0.4 },
-      this.scene
-    );
-    trunk.position.y = 1.25;
-    const foliage = MeshBuilder.CreateCylinder(
-      'proto_foliage',
-      { height: 5.5, diameterTop: 0.1, diameterBottom: 2.8 },
-      this.scene
-    );
-    foliage.position.y = 4.2;
+    let treeProto: Mesh | null = null;
+    let rockProto: Mesh | null = null;
 
-    const trunkMat = new PBRMaterial('trunk_mat', this.scene);
-    trunkMat.albedoColor = new Color3(0.3, 0.2, 0.12);
-    trunkMat.roughness = 0.9;
-    trunk.material = trunkMat;
+    // Load authentic CC0 Fir Tree model from Poly Haven
+    try {
+      const treeRes = await SceneLoader.ImportMeshAsync(
+        '',
+        '',
+        baseUrl + 'assets/veg/fir_tree/fir_tree_01_1k.gltf',
+        this.scene
+      );
+      for (const m of treeRes.meshes) {
+        if (m.name.includes('fir_tree_01_a') || (!treeProto && m.getTotalVertices() > 0)) {
+          treeProto = m as Mesh;
+        }
+      }
+      if (treeProto) {
+        treeProto.parent = this.rootMesh;
+        treeProto.scaling.set(1.4, 1.4, 1.4);
+        treeProto.isVisible = false;
+      }
+    } catch (e) {
+      console.warn('Could not load fir_tree gltf, using clean fallback:', e);
+    }
 
-    const foliageMat = new PBRMaterial('foliage_mat', this.scene);
-    foliageMat.albedoColor = new Color3(0.12, 0.28, 0.14);
-    foliageMat.roughness = 0.85;
-    foliage.material = foliageMat;
+    // Load authentic CC0 Coastal Rock boulder model
+    try {
+      const rockRes = await SceneLoader.ImportMeshAsync(
+        '',
+        '',
+        baseUrl + 'assets/veg/coast_rocks/coast_rocks_01_1k.gltf',
+        this.scene
+      );
+      for (const m of rockRes.meshes) {
+        if (m.name.includes('coast_rocks') || (!rockProto && m.getTotalVertices() > 0)) {
+          rockProto = m as Mesh;
+        }
+      }
+      if (rockProto) {
+        rockProto.parent = this.rootMesh;
+        rockProto.scaling.set(1.5, 1.5, 1.5);
+        rockProto.isVisible = false;
+      }
+    } catch (e) {
+      console.warn('Could not load coast_rocks gltf, using clean fallback:', e);
+    }
 
-    const treeProto = Mesh.MergeMeshes([trunk, foliage], true, true, undefined, false, true);
-    if (!treeProto) return;
-    treeProto.parent = this.rootMesh;
-    treeProto.receiveShadows = true;
-    treeProto.isVisible = false;
+    // Fallbacks if gltf assets could not be parsed
+    if (!treeProto) {
+      const trunk = MeshBuilder.CreateCylinder('proto_trunk', { height: 3.0, diameter: 0.45 }, this.scene);
+      const foliage = MeshBuilder.CreateCylinder('proto_foliage', { height: 6.0, diameterTop: 0.1, diameterBottom: 3.2 }, this.scene);
+      foliage.position.y = 4.5;
+      treeProto = Mesh.MergeMeshes([trunk, foliage], true, true, undefined, false, true) as Mesh;
+      if (treeProto) {
+        treeProto.parent = this.rootMesh;
+        treeProto.isVisible = false;
+      }
+    }
 
-    // Rock Prototype
-    const rockProto = MeshBuilder.CreatePolyhedron(
-      'proto_rock',
-      { type: 1, size: 1.8 },
-      this.scene
-    );
-    rockProto.parent = this.rootMesh;
-    const rockMat = new PBRMaterial('rock_mat', this.scene);
-    rockMat.albedoColor = new Color3(0.45, 0.44, 0.42);
-    rockMat.roughness = 0.95;
-    rockProto.material = rockMat;
-    rockProto.receiveShadows = true;
-    rockProto.isVisible = false;
+    if (!rockProto) {
+      rockProto = MeshBuilder.CreatePolyhedron('proto_rock', { type: 1, size: 2.0 }, this.scene);
+      rockProto.parent = this.rootMesh;
+      rockProto.isVisible = false;
+    }
 
     const step = Math.max(3, Math.floor(6 / density));
     let treeId = 0;
@@ -232,31 +255,35 @@ export class Environment {
       const tangent = next.subtract(pt).normalize();
       const right = Vector3.Cross(Vector3.Up(), tangent).normalize();
 
-      const offsetL = 12 + ((i * 17) % 25);
+      // Forest side (inland / left of road)
+      const offsetL = 12 + ((i * 17) % 28);
       const treePos = pt.add(right.scale(-offsetL));
       treePos.y = pt.y - 0.2;
 
-      const treeInstance = treeProto.createInstance(`tree_${treeId++}`);
-      treeInstance.parent = this.rootMesh;
-      treeInstance.position.copyFrom(treePos);
-      const treeScale = 0.8 + ((i * 7) % 50) / 70;
-      treeInstance.scaling.set(treeScale, treeScale, treeScale);
-      treeInstance.rotation.y = (i * 13) % (Math.PI * 2);
-      if (this.shadowGenerator) {
-        this.shadowGenerator.addShadowCaster(treeInstance, false);
+      if (treeProto) {
+        const treeInstance = treeProto.createInstance(`fir_tree_${treeId++}`);
+        treeInstance.parent = this.rootMesh;
+        treeInstance.position.copyFrom(treePos);
+        const scale = 0.9 + ((i * 7) % 40) / 50;
+        treeInstance.scaling.set(scale, scale, scale);
+        treeInstance.rotation.y = (i * 13) % (Math.PI * 2);
+        if (this.shadowGenerator) {
+          this.shadowGenerator.addShadowCaster(treeInstance, false);
+        }
+        this.propMeshes.push(treeInstance);
       }
-      this.propMeshes.push(treeInstance);
 
-      if (i % (step * 2) === 0) {
-        const offsetR = 10 + ((i * 11) % 18);
-        const rockPos = pt.add(right.scale(-offsetR));
+      // Coastal boulder side (right of road)
+      if (i % (step * 2) === 0 && rockProto) {
+        const offsetR = 9 + ((i * 11) % 16);
+        const rockPos = pt.add(right.scale(offsetR));
         rockPos.y = pt.y - 0.3;
 
-        const rockInstance = rockProto.createInstance(`rock_${rockId++}`);
+        const rockInstance = rockProto.createInstance(`boulder_${rockId++}`);
         rockInstance.parent = this.rootMesh;
         rockInstance.position.copyFrom(rockPos);
-        const rockScale = 0.9 + ((i * 5) % 40) / 40;
-        rockInstance.scaling.set(rockScale * 1.4, rockScale * 0.8, rockScale * 1.2);
+        const rockScale = 0.8 + ((i * 5) % 35) / 35;
+        rockInstance.scaling.set(rockScale * 1.3, rockScale * 0.9, rockScale * 1.2);
         rockInstance.rotation.set((i * 3) % 3, (i * 5) % 6, (i * 7) % 3);
         this.propMeshes.push(rockInstance);
       }

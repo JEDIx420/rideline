@@ -7,6 +7,7 @@ import { RiderRig } from './RiderRig';
 import { RiderPoseController } from './RiderPoseController';
 import { CANONICAL_RIDER_DEFINITION } from './RiderDefinition';
 import { RiderBikeProfile, getRiderBikeProfile } from './RiderBikeProfile';
+import { RiderIK } from './RiderIK';
 import { BikeController } from '../bikes/BikeController';
 
 export class RiderController {
@@ -42,15 +43,53 @@ export class RiderController {
     this.poseController = new RiderPoseController();
   }
 
-  public attachToBike(bikeRootNode: TransformNode): void {
-    this.rootNode.parent = bikeRootNode;
-    this.rootNode.position.copyFrom(this.profile.seatOffset);
+  public bikeTargets: {
+    seatAnchor: TransformNode;
+    leftGripAnchor: TransformNode;
+    rightGripAnchor: TransformNode;
+    leftRearsetAnchor: TransformNode;
+    rightRearsetAnchor: TransformNode;
+  } | null = null;
+  public baseMountPosition: Vector3 = new Vector3(0, 0, 0);
+
+  public attachToBike(
+    bikePhysicsRoot: TransformNode,
+    riderTargets?: {
+      seatAnchor: TransformNode;
+      leftGripAnchor: TransformNode;
+      rightGripAnchor: TransformNode;
+      leftRearsetAnchor: TransformNode;
+      rightRearsetAnchor: TransformNode;
+    } | null
+  ): void {
+    this.rootNode.parent = bikePhysicsRoot;
+    this.bikeTargets = riderTargets || null;
+    this.recomputeMountPosition();
+  }
+
+  public recomputeMountPosition(): void {
+    // Rider Hips bind local position relative to RiderAssetRoot
+    // Since RiderAssetRoot has 180° yaw rotation:
+    // (x, y, z) in RiderAssetRoot becomes (-x, y, -z) in RiderMountRoot
+    const hipsLocalInMount = new Vector3(
+      -this.rig.hipsBindLocalPosition.x,
+      this.rig.hipsBindLocalPosition.y,
+      -this.rig.hipsBindLocalPosition.z
+    );
+
+    const seatPos = this.bikeTargets
+      ? this.bikeTargets.seatAnchor.position
+      : this.profile.seatOffset;
+
+    // riderMountPosition = seatAnchor - transformedAndScaled(hipsBindLocalPosition)
+    this.baseMountPosition = seatPos.subtract(hipsLocalInMount);
+    this.rootNode.position.copyFrom(this.baseMountPosition);
     this.rootNode.rotation.set(0, 0, 0);
   }
 
   public setProfile(profile: RiderBikeProfile): void {
     this.profile = profile;
-    this.rootNode.position.copyFrom(this.profile.seatOffset);
+    this.recomputeMountPosition();
   }
 
   public update(dt: number, bike: BikeController): void {
@@ -58,12 +97,16 @@ export class RiderController {
     this.poseController.update(dt, bike, this.profile, this.rig);
 
     // 2. Dynamic Pelvis offset on seat (tuck shift + lean shift)
-    const baseSeat = this.profile.seatOffset;
     this.rootNode.position.set(
-      baseSeat.x + this.poseController.currentPelvisOffset.x,
-      baseSeat.y + this.poseController.currentPelvisOffset.y,
-      baseSeat.z + this.poseController.currentPelvisOffset.z
+      this.baseMountPosition.x + this.poseController.currentPelvisOffset.x,
+      this.baseMountPosition.y + this.poseController.currentPelvisOffset.y,
+      this.baseMountPosition.z + this.poseController.currentPelvisOffset.z
     );
+
+    // 3. Solve limb IK every frame after motorcycle targets have updated
+    const steerAngleRad = bike.physics.steerAngleRad;
+    const targets = this.bikeTargets || (bike.loadedBike ? bike.loadedBike.riderTargets : null);
+    RiderIK.applyLimbIK(this.rig, this.profile, steerAngleRad, targets);
   }
 
   public getHelmetEyeWorldPosition(): Vector3 {

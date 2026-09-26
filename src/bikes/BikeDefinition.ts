@@ -55,6 +55,14 @@ export interface GarageCameraConfig {
   targetOffset: Vector3;
 }
 
+export interface RiderAnchors {
+  seatAnchor: Vector3;
+  leftGripAnchor: Vector3;
+  rightGripAnchor: Vector3;
+  leftRearsetAnchor: Vector3;
+  rightRearsetAnchor: Vector3;
+}
+
 export interface BikeDefinition {
   id: string;
   displayName: string;
@@ -70,6 +78,7 @@ export interface BikeDefinition {
   transmission: TransmissionConfig;
   nodeMapping: NodeMapping;
   cameraAnchors: CameraAnchors;
+  riderAnchors?: RiderAnchors;
   audioProfile?: BikeAudioProfile;
   garageCamera?: GarageCameraConfig;
 }

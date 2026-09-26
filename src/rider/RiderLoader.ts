@@ -10,6 +10,8 @@ import { RiderRig } from './RiderRig';
 
 export interface LoadedRider {
   definition: RiderDefinition;
+  mountRoot: TransformNode;
+  assetRoot: TransformNode;
   rootNode: TransformNode;
   rig: RiderRig;
   meshes: AbstractMesh[];
@@ -26,8 +28,14 @@ export class RiderLoader {
     const cleanPath = definition.modelPath.replace(/^\//, '');
     const fullModelUrl = baseUrl + cleanPath;
 
-    const rootNode = new TransformNode(`rider_root_${definition.id}`, scene);
-    rootNode.scaling.copyFrom(definition.modelScale);
+    // 1. RiderMountRoot: clean RIDELINE coordinate space
+    const mountRoot = new TransformNode(`rider_mount_root_${definition.id}`, scene);
+
+    // 2. RiderAssetRoot: receives model scale and 180° yaw correction
+    const assetRoot = new TransformNode(`rider_asset_root_${definition.id}`, scene);
+    assetRoot.parent = mountRoot;
+    assetRoot.scaling.copyFrom(definition.modelScale);
+    assetRoot.rotation.copyFrom(definition.rotationOffset);
 
     const result = await SceneLoader.ImportMeshAsync(
       '',
@@ -44,11 +52,11 @@ export class RiderLoader {
 
     const meshes: AbstractMesh[] = [];
 
-    // Parent loaded top-level nodes/meshes under rootNode
+    // Parent loaded top-level nodes/meshes under assetRoot
     for (const mesh of result.meshes) {
       meshes.push(mesh);
       if (!mesh.parent) {
-        mesh.parent = rootNode;
+        mesh.parent = assetRoot;
       }
 
       if (shadowGenerator && mesh.getTotalVertices() > 0) {
@@ -59,7 +67,7 @@ export class RiderLoader {
 
     for (const tn of result.transformNodes) {
       if (!tn.parent) {
-        tn.parent = rootNode;
+        tn.parent = assetRoot;
       }
     }
 
@@ -68,11 +76,13 @@ export class RiderLoader {
       throw new Error(`Loaded rider asset from ${fullModelUrl} has no skeleton!`);
     }
 
-    const rig = new RiderRig(rootNode, skeleton, meshes);
+    const rig = new RiderRig(mountRoot, skeleton, meshes);
 
     return {
       definition,
-      rootNode,
+      mountRoot,
+      assetRoot,
+      rootNode: mountRoot,
       rig,
       meshes,
     };

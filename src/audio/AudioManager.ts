@@ -97,7 +97,8 @@ export class AudioManager {
         bike.engine.throttle,
         bike.redlineRpm,
         isCockpit,
-        mix
+        mix,
+        bike.transmission.isTorqueCut
       );
     }
 

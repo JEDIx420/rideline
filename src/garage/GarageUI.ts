@@ -28,11 +28,10 @@ export class GarageUI {
     this.container.className = 'garage-ui-container';
 
     this.container.innerHTML = `
-      <!-- Top Luxury Header -->
+      <!-- Top Bar -->
       <div class="garage-top-bar">
         <div class="garage-brand">
           <div class="garage-logo">RIDELINE</div>
-          <div class="garage-badge">3D SHOWROOM // GARAGE</div>
         </div>
         <div class="garage-top-actions">
           <button id="btn-garage-settings" class="garage-action-btn" aria-label="Settings">

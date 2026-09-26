@@ -179,7 +179,8 @@ export class Game {
 
       this.activeBike = new BikeController(
         bikeDef,
-        this.loadedBikeData.visualController
+        this.loadedBikeData.visualController,
+        this.loadedBikeData
       );
 
       // Create & Attach Rider
@@ -189,7 +190,7 @@ export class Game {
         bikeDef.id,
         this.world.environment.shadowGenerator
       );
-      rider.attachToBike(this.loadedBikeData.rootNode);
+      rider.attachToBike(this.loadedBikeData.physicsRoot, this.loadedBikeData.riderTargets);
       this.activeBike.setRider(rider);
 
       // Configure Audio Profile
