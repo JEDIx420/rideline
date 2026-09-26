@@ -17,6 +17,7 @@ export class GarageScene {
   public rimLight: DirectionalLight | null = null;
   public ambientLight: HemisphericLight | null = null;
   public shadowGenerator: ShadowGenerator | null = null;
+  public shadowGenerator2: ShadowGenerator | null = null;
   public studioEnvTexture: HDRCubeTexture | null = null;
 
   public floorMesh: Mesh | null = null;
@@ -53,10 +54,10 @@ export class GarageScene {
     this.ambientLight.diffuse = new Color3(0.85, 0.90, 0.96);
     this.ambientLight.groundColor = new Color3(0.12, 0.13, 0.16);
 
-    // Primary Overhead Key Spotlight (soft wide cone over parking bays)
+    // Bay 1 Overhead Key Spotlight (-4.5m)
     this.keyLight = new SpotLight(
-      'garage_key_spot',
-      new Vector3(0, 3.8, 0.8),
+      'garage_key_spot_bay1',
+      new Vector3(-4.5, 3.8, 0.8),
       new Vector3(0, -0.92, -0.38).normalize(),
       Math.PI / 2.2,
       6,
@@ -65,6 +66,19 @@ export class GarageScene {
     this.keyLight.intensity = 5.5;
     this.keyLight.diffuse = new Color3(1.0, 0.98, 0.95);
     this.keyLight.specular = new Color3(0.9, 0.9, 0.9);
+
+    // Bay 2 Overhead Spotlight (+4.5m)
+    this.fillLight = new SpotLight(
+      'garage_key_spot_bay2',
+      new Vector3(4.5, 3.8, 0.8),
+      new Vector3(0, -0.92, -0.38).normalize(),
+      Math.PI / 2.2,
+      6,
+      this.scene
+    );
+    this.fillLight.intensity = 5.5;
+    this.fillLight.diffuse = new Color3(1.0, 0.98, 0.95);
+    this.fillLight.specular = new Color3(0.9, 0.9, 0.9);
 
     // Soft Rim / Kick Light from rear wall
     this.rimLight = new DirectionalLight(
@@ -75,18 +89,23 @@ export class GarageScene {
     this.rimLight.intensity = 1.2;
     this.rimLight.diffuse = new Color3(0.75, 0.85, 1.0);
 
-    // Studio Contact Shadows
+    // Studio Contact Shadows for Bay 1 & Bay 2
     this.shadowGenerator = new ShadowGenerator(2048, this.keyLight);
     this.shadowGenerator.usePercentageCloserFiltering = true;
     this.shadowGenerator.filteringQuality = ShadowGenerator.QUALITY_HIGH;
     this.shadowGenerator.bias = 0.0012;
+
+    this.shadowGenerator2 = new ShadowGenerator(2048, this.fillLight);
+    this.shadowGenerator2.usePercentageCloserFiltering = true;
+    this.shadowGenerator2.filteringQuality = ShadowGenerator.QUALITY_HIGH;
+    this.shadowGenerator2.bias = 0.0012;
   }
 
   private setupWorkshopGeometry(): void {
     // 1. Concrete / Dark Charcoal Epoxy Floor (subtle reflection, durable workshop aesthetic)
     this.floorMesh = MeshBuilder.CreateGround(
       'garage_epoxy_floor',
-      { width: 18, height: 16, subdivisions: 2 },
+      { width: 24, height: 16, subdivisions: 2 },
       this.scene
     );
     this.floorMesh.parent = this.rootMesh;
@@ -112,7 +131,7 @@ export class GarageScene {
     stripeMat.roughness = 0.45;
 
     // 2. Back Wall (Z = +6.0m)
-    const backWall = MeshBuilder.CreatePlane('garage_back_wall', { width: 18, height: 4.2 }, this.scene);
+    const backWall = MeshBuilder.CreatePlane('garage_back_wall', { width: 24, height: 4.2 }, this.scene);
     backWall.parent = this.rootMesh;
     backWall.position.set(0, 2.1, 6.0);
     backWall.rotation.y = Math.PI;
@@ -121,31 +140,31 @@ export class GarageScene {
     this.workshopMeshes.push(backWall);
 
     // Back wall accent lower stripe
-    const backStripe = MeshBuilder.CreatePlane('garage_back_stripe', { width: 18, height: 0.15 }, this.scene);
+    const backStripe = MeshBuilder.CreatePlane('garage_back_stripe', { width: 24, height: 0.15 }, this.scene);
     backStripe.parent = this.rootMesh;
     backStripe.position.set(0, 1.1, 5.99);
     backStripe.rotation.y = Math.PI;
     backStripe.material = stripeMat;
     this.workshopMeshes.push(backStripe);
 
-    // 3. Left Wall (X = -7.5m)
+    // 3. Left Wall (X = -10.5m)
     const leftWall = MeshBuilder.CreatePlane('garage_left_wall', { width: 16, height: 4.2 }, this.scene);
     leftWall.parent = this.rootMesh;
-    leftWall.position.set(-7.5, 2.1, 0);
+    leftWall.position.set(-10.5, 2.1, 0);
     leftWall.rotation.y = Math.PI / 2;
     leftWall.material = wallMat;
     this.workshopMeshes.push(leftWall);
 
-    // 4. Right Wall (X = +7.5m)
+    // 4. Right Wall (X = +10.5m)
     const rightWall = MeshBuilder.CreatePlane('garage_right_wall', { width: 16, height: 4.2 }, this.scene);
     rightWall.parent = this.rootMesh;
-    rightWall.position.set(7.5, 2.1, 0);
+    rightWall.position.set(10.5, 2.1, 0);
     rightWall.rotation.y = -Math.PI / 2;
     rightWall.material = wallMat;
     this.workshopMeshes.push(rightWall);
 
     // 5. Ceiling with Industrial Crossbeams (Y = 4.2m)
-    const ceiling = MeshBuilder.CreatePlane('garage_ceiling', { width: 18, height: 16 }, this.scene);
+    const ceiling = MeshBuilder.CreatePlane('garage_ceiling', { width: 24, height: 16 }, this.scene);
     ceiling.parent = this.rootMesh;
     ceiling.position.set(0, 4.2, 0);
     ceiling.rotation.x = Math.PI / 2;
@@ -155,27 +174,72 @@ export class GarageScene {
     ceiling.material = ceilingMat;
     this.workshopMeshes.push(ceiling);
 
-    // 6. Large Industrial Roller Shutter Door on Front/Back
-    this.buildRollerDoor(0, 2.0, 5.95);
+    // 6. Central Architectural Divider Partition (isolates Bay 1 from Bay 2)
+    this.buildCenterPartition();
 
-    // 7. Workbench on Right Wall (Snap-on / mechanic style)
-    this.buildWorkbench(5.8, 0, 1.5);
+    // 7. Individual Roller Shutter Doors for Bay 1 and Bay 2
+    this.buildRollerDoor(-4.5, 2.0, 5.95, 'bay1');
+    this.buildRollerDoor(4.5, 2.0, 5.95, 'bay2');
 
-    // 8. Tool Cabinet & Storage Shelving
-    this.buildToolCabinet(5.8, 0, -1.8);
+    // 8. Workbench on Right Wall (Snap-on / mechanic style)
+    this.buildWorkbench(9.2, 0, 1.5);
 
-    // 9. Tyre Rack on Left Wall with Racing Slicks
-    this.buildTyreRack(-6.2, 0, 0);
+    // 9. Tool Cabinet & Storage Shelving
+    this.buildToolCabinet(9.2, 0, -1.8);
 
-    // 10. Overhead Fluorescent Light Fixtures (recessed LED panels)
+    // 10. Tyre Rack on Left Wall with Racing Slicks
+    this.buildTyreRack(-9.2, 0, 0);
+
+    // 11. Overhead Fluorescent Light Fixtures (recessed LED panels)
     this.buildCeilingLightFixtures();
   }
 
-  private buildRollerDoor(x: number, y: number, z: number): void {
-    const doorFrame = MeshBuilder.CreateBox('door_frame', { width: 6.2, height: 3.6, depth: 0.12 }, this.scene);
+  private buildCenterPartition(): void {
+    // Architectural divider partition separating Bay 1 (-4.5m) and Bay 2 (+4.5m)
+    const partition = MeshBuilder.CreateBox('center_partition', { width: 0.35, height: 3.6, depth: 9.0 }, this.scene);
+    partition.parent = this.rootMesh;
+    partition.position.set(0, 1.8, 1.5);
+    const partMat = new PBRMaterial('partition_mat', this.scene);
+    partMat.albedoColor = new Color3(0.14, 0.15, 0.17);
+    partMat.metallic = 0.2;
+    partMat.roughness = 0.7;
+    partition.material = partMat;
+    partition.receiveShadows = true;
+    this.workshopMeshes.push(partition);
+
+    // Illuminated Motorsport Racing Blue LED accent stripe
+    const stripe = MeshBuilder.CreateBox('partition_stripe', { width: 0.37, height: 0.08, depth: 9.0 }, this.scene);
+    stripe.parent = this.rootMesh;
+    stripe.position.set(0, 1.1, 1.5);
+    const stripeMat = new PBRMaterial('partition_stripe_mat', this.scene);
+    stripeMat.emissiveColor = new Color3(0.08, 0.35, 0.85);
+    stripeMat.roughness = 0.2;
+    stripe.material = stripeMat;
+    this.workshopMeshes.push(stripe);
+
+    // Sleek brushed steel vertical pillars at front and back of partition
+    const pillarFront = MeshBuilder.CreateBox('pillar_front', { width: 0.42, height: 3.8, depth: 0.42 }, this.scene);
+    pillarFront.parent = this.rootMesh;
+    pillarFront.position.set(0, 1.9, -3.0);
+    const pillarMat = new PBRMaterial('pillar_metal_mat', this.scene);
+    pillarMat.albedoColor = new Color3(0.25, 0.26, 0.28);
+    pillarMat.metallic = 0.9;
+    pillarMat.roughness = 0.25;
+    pillarFront.material = pillarMat;
+    this.workshopMeshes.push(pillarFront);
+
+    const pillarBack = MeshBuilder.CreateBox('pillar_back', { width: 0.42, height: 3.8, depth: 0.42 }, this.scene);
+    pillarBack.parent = this.rootMesh;
+    pillarBack.position.set(0, 1.9, 5.9);
+    pillarBack.material = pillarMat;
+    this.workshopMeshes.push(pillarBack);
+  }
+
+  private buildRollerDoor(x: number, y: number, z: number, id: string): void {
+    const doorFrame = MeshBuilder.CreateBox(`door_frame_${id}`, { width: 4.8, height: 3.6, depth: 0.12 }, this.scene);
     doorFrame.parent = this.rootMesh;
     doorFrame.position.set(x, y, z);
-    const frameMat = new PBRMaterial('door_frame_mat', this.scene);
+    const frameMat = new PBRMaterial(`door_frame_mat_${id}`, this.scene);
     frameMat.albedoColor = new Color3(0.12, 0.13, 0.15);
     frameMat.metallic = 0.8;
     frameMat.roughness = 0.35;
@@ -184,10 +248,10 @@ export class GarageScene {
 
     // Corrugated horizontal slats
     for (let i = 0; i < 16; i++) {
-      const slat = MeshBuilder.CreateBox(`slat_${i}`, { width: 5.9, height: 0.19, depth: 0.04 }, this.scene);
+      const slat = MeshBuilder.CreateBox(`slat_${id}_${i}`, { width: 4.6, height: 0.19, depth: 0.04 }, this.scene);
       slat.parent = this.rootMesh;
       slat.position.set(x, 0.35 + i * 0.21, z - 0.04);
-      const slatMat = new PBRMaterial(`slat_mat_${i}`, this.scene);
+      const slatMat = new PBRMaterial(`slat_mat_${id}_${i}`, this.scene);
       slatMat.albedoColor = new Color3(0.24, 0.26, 0.30);
       slatMat.metallic = 0.85;
       slatMat.roughness = 0.40;
@@ -283,12 +347,19 @@ export class GarageScene {
   }
 
   private buildCeilingLightFixtures(): void {
-    // 4 Long Rectangular Fluorescent Light Fixture Housings
+    // 8 Long Rectangular Fluorescent Light Fixture Housings (4 per bay)
     const fixturePositions = [
-      new Vector3(-2.2, 4.15, -0.8),
-      new Vector3(-2.2, 4.15, 1.8),
-      new Vector3(2.2, 4.15, -0.8),
-      new Vector3(2.2, 4.15, 1.8),
+      // Bay 1 Fixtures (centered around X = -4.5m)
+      new Vector3(-5.7, 4.15, -0.8),
+      new Vector3(-5.7, 4.15, 1.8),
+      new Vector3(-3.3, 4.15, -0.8),
+      new Vector3(-3.3, 4.15, 1.8),
+
+      // Bay 2 Fixtures (centered around X = +4.5m)
+      new Vector3(3.3, 4.15, -0.8),
+      new Vector3(3.3, 4.15, 1.8),
+      new Vector3(5.7, 4.15, -0.8),
+      new Vector3(5.7, 4.15, 1.8),
     ];
 
     const fixtureMat = new PBRMaterial('light_fixture_mat', this.scene);
@@ -330,6 +401,8 @@ export class GarageScene {
     this.fillLight?.dispose();
     this.rimLight?.dispose();
     this.ambientLight?.dispose();
+    this.shadowGenerator?.dispose();
+    this.shadowGenerator2?.dispose();
     this.studioEnvTexture?.dispose();
   }
 }

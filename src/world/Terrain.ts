@@ -9,11 +9,19 @@ import { Road } from './Road';
 export interface SurfaceContactInfo {
   elevation: number;
   normal: Vector3;
-  surfaceType: 'asphalt' | 'shoulder' | 'offroad' | 'water';
+  surfaceType: 'asphalt' | 'shoulder' | 'offroad' | 'water' | 'out_of_bounds';
   frictionMultiplier: number;
   dragMultiplier: number;
   pitch: number;
 }
+
+export const WORLD_BOUNDS = {
+  minX: -1050,
+  maxX: 2050,
+  minZ: -1750,
+  maxZ: 1350,
+  maxAllowedRoadDistance: 50.0,
+};
 
 export class Terrain {
   public terrainMesh: Mesh | null = null;
@@ -60,6 +68,25 @@ export class Terrain {
     const distToCenter = roadPoint.distanceToCenter;
     const halfWidth = road.width * 0.5; // ~4.5m
     const shoulderWidth = 2.0;
+
+    // Out-of-bounds nether limbo elimination check
+    const isOutOfBounds =
+      pos.x < WORLD_BOUNDS.minX ||
+      pos.x > WORLD_BOUNDS.maxX ||
+      pos.z < WORLD_BOUNDS.minZ ||
+      pos.z > WORLD_BOUNDS.maxZ ||
+      distToCenter > WORLD_BOUNDS.maxAllowedRoadDistance;
+
+    if (isOutOfBounds) {
+      return {
+        elevation: roadPoint.position.y,
+        normal: roadPoint.normal,
+        surfaceType: 'out_of_bounds',
+        frictionMultiplier: 0.1,
+        dragMultiplier: 10.0,
+        pitch: roadPoint.pitch,
+      };
+    }
 
     const terrainHeight = this.getElevationAt(pos.x, pos.z);
     const terrainNormal = this.getNormalAt(pos.x, pos.z);

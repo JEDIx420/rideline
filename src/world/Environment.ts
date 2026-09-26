@@ -183,26 +183,26 @@ export class Environment {
     let treeProto: Mesh | null = null;
     let rockProto: Mesh | null = null;
 
-    // Load authentic CC0 Fir Tree model from Poly Haven
+    // Load authentic CC0 Tree model
     try {
       const treeRes = await SceneLoader.ImportMeshAsync(
         '',
         '',
-        baseUrl + 'assets/veg/fir_tree/fir_tree_01_1k.gltf',
+        baseUrl + 'assets/veg/tree/tree.glb',
         this.scene
       );
       for (const m of treeRes.meshes) {
-        if (m.name.includes('fir_tree_01_a') || (!treeProto && m.getTotalVertices() > 0)) {
+        if (m.getTotalVertices() > 0 && !treeProto) {
           treeProto = m as Mesh;
         }
       }
       if (treeProto) {
         treeProto.parent = this.rootMesh;
-        treeProto.scaling.set(1.4, 1.4, 1.4);
+        treeProto.scaling.set(1.3, 1.3, 1.3);
         treeProto.isVisible = false;
       }
     } catch (e) {
-      console.warn('Could not load fir_tree gltf, using clean fallback:', e);
+      console.warn('Could not load tree glb:', e);
     }
 
     // Load authentic CC0 Coastal Rock boulder model
@@ -210,39 +210,21 @@ export class Environment {
       const rockRes = await SceneLoader.ImportMeshAsync(
         '',
         '',
-        baseUrl + 'assets/veg/coast_rocks/coast_rocks_01_1k.gltf',
+        baseUrl + 'assets/veg/rock_07/rock_07_1k.gltf',
         this.scene
       );
       for (const m of rockRes.meshes) {
-        if (m.name.includes('coast_rocks') || (!rockProto && m.getTotalVertices() > 0)) {
+        if (m.getTotalVertices() > 0 && !rockProto) {
           rockProto = m as Mesh;
         }
       }
       if (rockProto) {
         rockProto.parent = this.rootMesh;
-        rockProto.scaling.set(1.5, 1.5, 1.5);
+        rockProto.scaling.set(14.0, 14.0, 14.0);
         rockProto.isVisible = false;
       }
     } catch (e) {
-      console.warn('Could not load coast_rocks gltf, using clean fallback:', e);
-    }
-
-    // Fallbacks if gltf assets could not be parsed
-    if (!treeProto) {
-      const trunk = MeshBuilder.CreateCylinder('proto_trunk', { height: 3.0, diameter: 0.45 }, this.scene);
-      const foliage = MeshBuilder.CreateCylinder('proto_foliage', { height: 6.0, diameterTop: 0.1, diameterBottom: 3.2 }, this.scene);
-      foliage.position.y = 4.5;
-      treeProto = Mesh.MergeMeshes([trunk, foliage], true, true, undefined, false, true) as Mesh;
-      if (treeProto) {
-        treeProto.parent = this.rootMesh;
-        treeProto.isVisible = false;
-      }
-    }
-
-    if (!rockProto) {
-      rockProto = MeshBuilder.CreatePolyhedron('proto_rock', { type: 1, size: 2.0 }, this.scene);
-      rockProto.parent = this.rootMesh;
-      rockProto.isVisible = false;
+      console.warn('Could not load rock_07 gltf:', e);
     }
 
     const step = Math.max(3, Math.floor(6 / density));

@@ -27,29 +27,29 @@ export const RIDER_BONE_NAMES = {
   Neck: 'Neck',
   Head: 'Head',
 
-  // Left Arm
-  LeftShoulder: 'LeftShoulder',
-  LeftArm: 'LeftArm',
-  LeftForeArm: 'LeftForeArm',
-  LeftHand: 'LeftHand',
+  // Anatomical Left Arm (reaches to left handlebar grip at -X)
+  LeftShoulder: 'RightShoulder',
+  LeftArm: 'RightArm',
+  LeftForeArm: 'RightForeArm',
+  LeftHand: 'RightHand',
 
-  // Right Arm
-  RightShoulder: 'RightShoulder',
-  RightArm: 'RightArm',
-  RightForeArm: 'RightForeArm',
-  RightHand: 'RightHand',
+  // Anatomical Right Arm (reaches to right handlebar grip at +X)
+  RightShoulder: 'LeftShoulder',
+  RightArm: 'LeftArm',
+  RightForeArm: 'LeftForeArm',
+  RightHand: 'LeftHand',
 
-  // Left Leg
-  LeftUpLeg: 'LeftUpLeg',
-  LeftLeg: 'LeftLeg',
-  LeftFoot: 'LeftFoot',
-  LeftToeBase: 'LeftToeBase',
+  // Anatomical Left Leg (reaches to left rearset at -X)
+  LeftUpLeg: 'RightUpLeg',
+  LeftLeg: 'RightLeg',
+  LeftFoot: 'RightFoot',
+  LeftToeBase: 'RightToeBase',
 
-  // Right Leg
-  RightUpLeg: 'RightUpLeg',
-  RightLeg: 'RightLeg',
-  RightFoot: 'RightFoot',
-  RightToeBase: 'RightToeBase',
+  // Anatomical Right Leg (reaches to right rearset at +X)
+  RightUpLeg: 'LeftUpLeg',
+  RightLeg: 'LeftLeg',
+  RightFoot: 'LeftFoot',
+  RightToeBase: 'LeftToeBase',
 } as const;
 
 export type RiderBoneKey = keyof typeof RIDER_BONE_NAMES;

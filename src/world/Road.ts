@@ -298,7 +298,7 @@ export class Road {
     const heading = Math.atan2(-dir.x, -dir.z);
 
     return {
-      position: new Vector3(startPt.x, startPt.y + 0.35, startPt.z),
+      position: new Vector3(startPt.x, startPt.y, startPt.z),
       headingRad: heading,
     };
   }

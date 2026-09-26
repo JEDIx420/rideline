@@ -17,8 +17,8 @@ export class GarageController {
   public bay1Bike: LoadedBike | null = null;
   public bay2Bike: LoadedBike | null = null;
 
-  public readonly BAY_1_POS: Vector3 = new Vector3(-1.85, 0, 0);
-  public readonly BAY_2_POS: Vector3 = new Vector3(1.85, 0, 0);
+  public readonly BAY_1_POS: Vector3 = new Vector3(-4.5, 0, 0);
+  public readonly BAY_2_POS: Vector3 = new Vector3(4.5, 0, 0);
 
   private selectedBikeDef: BikeDefinition = S1000RR_2019;
 
@@ -67,7 +67,7 @@ export class GarageController {
       this.bay2Bike = await BikeLoader.loadBike(
         M1000RR_RACE,
         this.scene,
-        this.garageScene.shadowGenerator
+        this.garageScene.shadowGenerator2 ?? this.garageScene.shadowGenerator
       );
       this.alignBikeToFloor(this.bay2Bike, this.BAY_2_POS, 0.15, 0.444);
 

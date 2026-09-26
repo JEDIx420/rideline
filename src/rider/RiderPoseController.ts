@@ -98,32 +98,9 @@ export class RiderPoseController {
     rig.setBoneEulerRotation(rig.neck, -this.currentSpinePitch * 0.40, this.currentHeadYaw * 0.4, this.currentHeadRoll * 0.4);
     rig.setBoneEulerRotation(rig.head, -this.currentSpinePitch * 0.50, this.currentHeadYaw * 0.6, this.currentHeadRoll * 0.6);
 
-    // 7. Base Arm Rest Posture (Sportbike clip-on reach)
-    const armTuckFlex = this.currentTuckFactor * 0.12;
-    // Left Arm
-    rig.setBoneEulerRotation(rig.leftShoulder, 0.08, 0.15, 0);
-    rig.setBoneEulerRotation(rig.leftArm, -0.15, 0.40 + armTuckFlex, 0.70);
-    rig.setBoneEulerRotation(rig.leftForeArm, -0.25, -0.18, 0.60 + armTuckFlex);
-    rig.setBoneEulerRotation(rig.leftHand, 0.20, 0.10, 0);
-
-    // Right Arm
-    rig.setBoneEulerRotation(rig.rightShoulder, 0.08, -0.15, 0);
-    rig.setBoneEulerRotation(rig.rightArm, -0.15, -0.40 - armTuckFlex, -0.70);
-    rig.setBoneEulerRotation(rig.rightForeArm, -0.25, 0.18, -0.60 - armTuckFlex);
-    rig.setBoneEulerRotation(rig.rightHand, 0.20, -0.10, 0);
-
-    // 8. Base Leg Riding Posture (Rearsets & Knee Tank Hug)
-    const kneeAngle = profile.kneeGripAngle;
-    const insideKneeFlare = lean < -0.1 ? -0.25 * Math.abs(lean) : (lean > 0.1 ? 0.25 * Math.abs(lean) : 0);
-
-    // Left Leg: thigh flexed forward, knee bent to rearset
-    rig.setBoneEulerRotation(rig.leftUpLeg, 1.35, -kneeAngle + (lean < -0.1 ? insideKneeFlare : 0), 0.12);
-    rig.setBoneEulerRotation(rig.leftLeg, -1.75, 0.05, 0);
-    rig.setBoneEulerRotation(rig.leftFoot, 0.50, 0.10, 0);
-
-    // Right Leg: thigh flexed forward, knee bent to rearset
-    rig.setBoneEulerRotation(rig.rightUpLeg, 1.35, kneeAngle + (lean > 0.1 ? insideKneeFlare : 0), -0.12);
-    rig.setBoneEulerRotation(rig.rightLeg, -1.75, -0.05, 0);
-    rig.setBoneEulerRotation(rig.rightFoot, 0.50, -0.10, 0);
+    // 7. Clavicle & Shoulder Posture for reach to clip-ons
+    const clavicleTuckFlex = this.currentTuckFactor * 0.08;
+    rig.setBoneEulerRotation(rig.leftShoulder, 0.08 + clavicleTuckFlex, 0.12, 0);
+    rig.setBoneEulerRotation(rig.rightShoulder, 0.08 + clavicleTuckFlex, -0.12, 0);
   }
 }

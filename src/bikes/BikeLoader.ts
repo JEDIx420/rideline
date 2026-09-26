@@ -4,6 +4,10 @@ import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
+import { Material } from '@babylonjs/core/Materials/material';
+import { MultiMaterial } from '@babylonjs/core/Materials/multiMaterial';
+import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
+import { Color3 } from '@babylonjs/core/Maths/math.color';
 import '@babylonjs/loaders/glTF'; // Register glTF / GLB loader
 
 import { BikeDefinition } from './BikeDefinition';
@@ -79,6 +83,11 @@ export class BikeLoader {
       if (shadowGenerator && mesh.getTotalVertices() > 0) {
         shadowGenerator.addShadowCaster(mesh, true);
         mesh.receiveShadows = true;
+      }
+
+      // Material normalization and tuning
+      if (mesh.material) {
+        BikeLoader.tuneMeshMaterials(mesh.material);
       }
     }
 
@@ -161,5 +170,43 @@ export class BikeLoader {
       allNodes: nodeMap,
       riderTargets,
     };
+  }
+
+  public static tuneMeshMaterials(material: Material): void {
+    if (material instanceof MultiMaterial) {
+      material.subMaterials.forEach((sub) => {
+        if (sub) BikeLoader.tuneMeshMaterials(sub);
+      });
+      return;
+    }
+
+    if (material instanceof PBRMaterial) {
+      const name = material.name.toLowerCase();
+
+      // Fix Tyre material: prevent alpha blend bugs & calibrate rubber albedo
+      if (name.includes('tire') || name.includes('tyre')) {
+        material.transparencyMode = PBRMaterial.PBRMATERIAL_OPAQUE;
+        material.alpha = 1.0;
+        // Authored texture has high-contrast white tread pattern.
+        // Tinting albedoColor to dark vulcanized rubber [0.12, 0.12, 0.13] normalizes the white treads
+        // and produces authentic semi-matte sports rubber appearance.
+        material.albedoColor = new Color3(0.12, 0.12, 0.13);
+        material.roughness = 0.82;
+        material.metallic = 0.02;
+        material.environmentIntensity = 0.35;
+        material.specularIntensity = 0.45;
+        material.backFaceCulling = true;
+      } else if (name.includes('rim') || name.includes('wheel')) {
+        material.transparencyMode = PBRMaterial.PBRMATERIAL_OPAQUE;
+        material.alpha = 1.0;
+        material.roughness = 0.35;
+        material.metallic = 0.85;
+      } else if (name.includes('bikedisc') || name.includes('disc')) {
+        material.transparencyMode = PBRMaterial.PBRMATERIAL_OPAQUE;
+        material.alpha = 1.0;
+        material.metallic = 0.95;
+        material.roughness = 0.25;
+      }
+    }
   }
 }

@@ -11,6 +11,7 @@ import { HUD } from '../ui/HUD';
 import { MobileControls } from '../ui/MobileControls';
 import { RotateDeviceOverlay } from '../ui/RotateDeviceOverlay';
 import { DebugOverlay } from '../debug/DebugOverlay';
+import { RiderCalibrationDebug } from '../debug/RiderCalibrationDebug';
 import { GarageController } from '../garage/GarageController';
 import { SettingsModal, SettingsState } from '../ui/SettingsModal';
 import { SoundUnlockPrompt } from '../ui/SoundUnlockPrompt';
@@ -34,6 +35,7 @@ export class Game {
   public mobileControls: MobileControls;
   public rotateOverlay: RotateDeviceOverlay;
   public debugOverlay: DebugOverlay;
+  public riderCalibrationDebug: RiderCalibrationDebug;
 
   public currentState: GameState = 'garage';
   public activeBike: BikeController | null = null;
@@ -57,6 +59,13 @@ export class Game {
     this.mobileControls = new MobileControls(this.inputManager.touch);
     this.rotateOverlay = new RotateDeviceOverlay();
     this.debugOverlay = new DebugOverlay();
+    this.riderCalibrationDebug = new RiderCalibrationDebug(this.sceneManager.scene);
+
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('debug') === '1') {
+      this.riderCalibrationDebug.toggle();
+    }
+
     this.settingsModal = new SettingsModal();
     this.soundUnlockPrompt = new SoundUnlockPrompt(this.audioManager);
 
@@ -269,6 +278,7 @@ export class Game {
     // Debug Overlay Toggle
     if (input.debugToggle) {
       this.debugOverlay.toggle();
+      this.riderCalibrationDebug.toggle();
     }
 
     // Step Motorcycle Physics & Visuals & Rider
@@ -295,7 +305,7 @@ export class Game {
       input.brake
     );
 
-    // Update Debug Overlay
+    // Update Debug Overlays
     this.debugOverlay.update(
       this.sceneManager.engine,
       this.sceneManager.scene,
@@ -303,6 +313,7 @@ export class Game {
       this.cameraManager.currentMode,
       this.currentGraphicsQuality
     );
+    this.riderCalibrationDebug.update(this.activeBike);
   }
 
   private render(): void {
@@ -316,8 +327,6 @@ export class Game {
     const forwardHeading = Math.atan2(-tangent.x, -tangent.z);
 
     const safeSpawnPos = roadPt.position.clone();
-    safeSpawnPos.y += 0.35;
-
     this.activeBike.reset(safeSpawnPos, forwardHeading);
     this.cameraManager.setActiveMode(this.cameraManager.currentMode, this.activeBike);
   }

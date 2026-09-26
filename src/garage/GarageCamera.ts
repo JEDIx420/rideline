@@ -5,8 +5,8 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 export class GarageCamera {
   public camera: ArcRotateCamera;
   private isUserInteracting: boolean = false;
-  private currentBayTarget: Vector3 = new Vector3(-1.8, 0.65, 0);
-  private desiredBayTarget: Vector3 = new Vector3(-1.8, 0.65, 0);
+  private currentBayTarget: Vector3 = new Vector3(-4.5, 0.65, 0);
+  private desiredBayTarget: Vector3 = new Vector3(-4.5, 0.65, 0);
 
   constructor(private scene: Scene, private canvas: HTMLCanvasElement) {
     // Start at dynamic 3/4 front-side hero angle framing Bay 1
@@ -15,7 +15,7 @@ export class GarageCamera {
       -Math.PI * 0.65,
       Math.PI * 0.38,
       3.0,
-      new Vector3(-1.8, 0.65, 0),
+      new Vector3(-4.5, 0.65, 0),
       this.scene
     );
 

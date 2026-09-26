@@ -25,7 +25,7 @@ export class BikePhysics {
   constructor(public config: BikePhysicsConfig) {}
 
   public reset(spawnPos: Vector3, spawnHeadingRad: number): void {
-    this.position.copyFrom(spawnPos);
+    this.position.set(spawnPos.x, spawnPos.y + this.config.groundContactOffsetY, spawnPos.z);
     this.velocity.set(0, 0, 0);
     this.speedMps = 0;
     this.accelerationMps2 = 0;
@@ -151,18 +151,30 @@ export class BikePhysics {
     this.position.z += forwardZ * this.speedMps * dt;
 
     // 4. Surface Elevation & Pitch Snapping
-    this.position.y = surface.elevation + this.config.wheelRadiusMeters;
+    this.position.y = surface.elevation + this.config.groundContactOffsetY;
     this.pitchAngleRad = surface.pitch;
 
     // 5. Suspension Squat & Dive
     const targetSuspensionPitch = (this.accelerationMps2 / 10.0) * this.config.suspensionStiffness;
     this.suspensionPitch += (targetSuspensionPitch - this.suspensionPitch) * Math.min(1.0, dt * 12.0);
 
-    // 6. Soft Road Edge Collision Boundary Check
+    // 6. Soft Road Edge Collision Boundary & Safety Auto-Recovery
     const roadPoint = road.getClosestPoint(this.position);
     const distFromCenter = roadPoint.distanceToCenter;
     const roadHalfWidth = road.width * 0.5 + 2.0; // Road width + gravel shoulder
-    if (distFromCenter > roadHalfWidth && surface.surfaceType !== 'water') {
+
+    if (surface.surfaceType === 'out_of_bounds' || distFromCenter > 45.0) {
+      // Emergency recovery corridor: smoothly glide bike back to road edge
+      const toRoad = roadPoint.position.subtract(this.position);
+      toRoad.y = 0;
+      const pullSpeed = Math.min(22.0, toRoad.length() * 2.0);
+      const pullDir = toRoad.normalize();
+      this.position.x += pullDir.x * pullSpeed * dt;
+      this.position.z += pullDir.z * pullSpeed * dt;
+      this.speedMps = Math.max(0, this.speedMps - 20.0 * dt);
+      const targetHeading = Math.atan2(-roadPoint.tangent.x, -roadPoint.tangent.z);
+      this.headingRad += (targetHeading - this.headingRad) * Math.min(1.0, dt * 6.0);
+    } else if (distFromCenter > roadHalfWidth && surface.surfaceType !== 'water') {
       // Off-road drag & mild slide friction
       this.speedMps = Math.max(0, this.speedMps - 8.0 * dt);
       // Gently deflect heading back toward road center

@@ -106,7 +106,7 @@ export class RiderController {
     // 3. Solve limb IK every frame after motorcycle targets have updated
     const steerAngleRad = bike.physics.steerAngleRad;
     const targets = this.bikeTargets || (bike.loadedBike ? bike.loadedBike.riderTargets : null);
-    RiderIK.applyLimbIK(this.rig, this.profile, steerAngleRad, targets);
+    RiderIK.applyLimbIK(this.rig, this.profile, steerAngleRad, targets, bike.physics.leanAngleRad);
   }
 
   public getHelmetEyeWorldPosition(): Vector3 {
