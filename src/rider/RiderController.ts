@@ -9,6 +9,7 @@ import { CANONICAL_RIDER_DEFINITION } from './RiderDefinition';
 import { RiderBikeProfile, getRiderBikeProfile } from './RiderBikeProfile';
 import { RiderIK } from './RiderIK';
 import { BikeController } from '../bikes/BikeController';
+import { WorldSurfaceQueryProvider } from '../world/WorldSurfaceQuery';
 
 export class RiderController {
   public rootNode: TransformNode;
@@ -92,9 +93,16 @@ export class RiderController {
     this.recomputeMountPosition();
   }
 
-  public update(dt: number, bike: BikeController): void {
-    // 1. Procedural posture & spine kinematics
-    this.poseController.update(dt, bike, this.profile, this.rig);
+  public update(dt: number, bike: BikeController, surfaceProvider?: WorldSurfaceQueryProvider): void {
+    // 1. Procedural posture & spine kinematics with road look-ahead
+    let lookAheadTangent: Vector3 | undefined = undefined;
+    if (surfaceProvider?.getLookAheadTangent && bike.physics.surfaceContact) {
+      lookAheadTangent = surfaceProvider.getLookAheadTangent(
+        bike.physics.surfaceContact.roadDistance,
+        30.0
+      );
+    }
+    this.poseController.update(dt, bike, this.profile, this.rig, lookAheadTangent);
 
     // 2. Dynamic Pelvis offset on seat (tuck shift + lean shift)
     this.rootNode.position.set(
@@ -106,7 +114,23 @@ export class RiderController {
     // 3. Solve limb IK every frame after motorcycle targets have updated
     const steerAngleRad = bike.physics.steerAngleRad;
     const targets = this.bikeTargets || (bike.loadedBike ? bike.loadedBike.riderTargets : null);
-    RiderIK.applyLimbIK(this.rig, this.profile, steerAngleRad, targets, bike.physics.leanAngleRad);
+
+    const shiftDuration = 0.25;
+    const isShifting = bike.transmission.timeSinceLastShiftSec < shiftDuration;
+    const shiftAction = isShifting ? bike.transmission.lastShiftDirection : 'none';
+    const shiftProgress = isShifting ? Math.min(1.0, bike.transmission.timeSinceLastShiftSec / shiftDuration) : 0;
+
+    RiderIK.applyLimbIK(
+      this.rig,
+      this.profile,
+      steerAngleRad,
+      targets,
+      bike.physics.leanAngleRad,
+      bike.lastInputs.throttle,
+      bike.lastInputs.brake,
+      shiftAction,
+      shiftProgress
+    );
   }
 
   public getHelmetEyeWorldPosition(): Vector3 {

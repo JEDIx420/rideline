@@ -76,6 +76,7 @@ export class Game {
       (bike) => {
         // SYNCHRONOUS AudioContext unlock directly in user click stack
         this.audioManager.unlock();
+        this.audioManager.musicManager.playLoadingTrack();
         this.startRide(bike);
       },
       () => {
@@ -103,6 +104,9 @@ export class Game {
         this.sceneManager.applyGraphicsPreset(state.graphicsQuality);
       }
       this.audioManager.setMasterVolume(state.isMuted ? 0 : state.masterVolume);
+      this.audioManager.setSfxVolume(state.sfxVolume);
+      this.audioManager.setMusicVolume(state.musicVolume);
+      this.audioManager.setMuted(state.isMuted);
       this.defaultCameraMode = state.defaultCamera;
       if (this.currentState === 'ride' && this.activeBike) {
         this.cameraManager.setActiveMode(this.defaultCameraMode, this.activeBike);
@@ -207,8 +211,8 @@ export class Game {
         this.audioManager.setAudioProfile(bikeDef.audioProfile);
       }
 
-      // Spawn bike at starting line
-      const spawn = this.world.road.getSpawnTransform();
+      // Spawn bike at starting line on streamed road
+      const spawn = this.world.getSpawnTransform();
       this.activeBike.reset(spawn.position, spawn.headingRad);
 
       // Set active camera
@@ -216,6 +220,9 @@ export class Game {
 
       // Transition game state
       this.currentState = 'ride';
+
+      // Crossfade loading music smoothly into roaring engine start
+      this.audioManager.musicManager.fadeOut(0.8);
 
       // Show HUD and Controls
       this.hideLoading();
@@ -287,8 +294,7 @@ export class Game {
       input.throttle,
       input.brake,
       input.steer,
-      this.world.road,
-      this.world.terrain
+      this.world
     );
 
     // Update World procedural streaming corridor (Slow-Roads architecture)

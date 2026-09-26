@@ -132,7 +132,11 @@ export class RiderIK {
     _profile: RiderBikeProfile,
     steerAngleRad: number,
     riderTargets?: RiderTargets | null,
-    leanAngleRad: number = 0
+    leanAngleRad: number = 0,
+    throttleInput: number = 0,
+    brakeInput: number = 0,
+    shiftAction: 'up' | 'down' | 'none' = 'none',
+    shiftProgress: number = 0
   ): void {
     const bikeRoot = rig.rootNode.parent as TransformNode;
     if (!bikeRoot || !riderTargets) return;
@@ -185,12 +189,21 @@ export class RiderIK {
       limbLengths.rightForearm
     );
 
-    // Hand Gripping Rotations
+    // Hand Gripping & Action Rotations:
+    // Left hand firmly grips bar
     if (rig.leftHand) {
       rig.setBoneEulerRotation(rig.leftHand, 0.22, 0.12 + steerAngleRad * 0.85, 0.04);
     }
+    // Right hand: throttle twist rolls wrist back, braking reaches for lever
     if (rig.rightHand) {
-      rig.setBoneEulerRotation(rig.rightHand, 0.22, -0.12 + steerAngleRad * 0.85, -0.04);
+      const throttleRoll = throttleInput * 0.18;
+      const brakeReach = brakeInput * 0.16;
+      rig.setBoneEulerRotation(
+        rig.rightHand,
+        0.22 + brakeReach,
+        -0.12 + steerAngleRad * 0.85 + throttleRoll - brakeReach * 0.5,
+        -0.04
+      );
     }
 
     // 3. Dynamic Leg Pole Targets (Knees)
@@ -239,12 +252,21 @@ export class RiderIK {
       limbLengths.rightShin
     );
 
-    // Foot on Peg Rotations - sole rests securely on rearsets
+    // Foot on Peg & Pedal Actions:
+    // Left Foot: Upward toe lift on upshift, downward toe press on downshift
     if (rig.leftFoot) {
-      rig.setBoneEulerRotation(rig.leftFoot, 0.20, 0.05, 0);
+      let shiftPitch = 0;
+      if (shiftAction === 'up') {
+        shiftPitch = -0.24 * Math.sin(shiftProgress * Math.PI);
+      } else if (shiftAction === 'down') {
+        shiftPitch = 0.20 * Math.sin(shiftProgress * Math.PI);
+      }
+      rig.setBoneEulerRotation(rig.leftFoot, 0.20 + shiftPitch, 0.05, 0);
     }
+    // Right Foot: Rear brake pedal depression under heavy braking
     if (rig.rightFoot) {
-      rig.setBoneEulerRotation(rig.rightFoot, 0.20, -0.05, 0);
+      const rearBrakePitch = brakeInput > 0.35 ? (brakeInput - 0.35) * 0.22 : 0;
+      rig.setBoneEulerRotation(rig.rightFoot, 0.20 + rearBrakePitch, -0.05, 0);
     }
   }
 }

@@ -2,12 +2,15 @@ import { BikeAudioProfile, DEFAULT_SUPERBIKE_AUDIO_PROFILE } from './AudioProfil
 import { RPMEngineAudio } from './RPMEngineAudio';
 import { FallbackEngineAudio } from './FallbackEngineAudio';
 import { WindAudio } from './WindAudio';
+import { MusicManager } from './MusicManager';
 import { BikeController } from '../bikes/BikeController';
 import { CameraMode } from '../cameras/CameraManager';
 
 export class AudioManager {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
+  private sfxGain: GainNode | null = null;
+  public musicManager: MusicManager = new MusicManager();
   public rpmEngineAudio: RPMEngineAudio | null = null;
   public fallbackEngineAudio: FallbackEngineAudio | null = null;
   public windAudio: WindAudio | null = null;
@@ -40,17 +43,25 @@ export class AudioManager {
 
     if (!this.masterGain) {
       this.masterGain = this.ctx.createGain();
-      this.masterGain.gain.setValueAtTime(0.75, this.ctx.currentTime);
+      this.masterGain.gain.setValueAtTime(0.85, this.ctx.currentTime);
       this.masterGain.connect(this.ctx.destination);
     }
 
+    if (!this.sfxGain) {
+      this.sfxGain = this.ctx.createGain();
+      this.sfxGain.gain.setValueAtTime(0.85, this.ctx.currentTime);
+      this.sfxGain.connect(this.masterGain);
+    }
+
+    this.musicManager.init(this.ctx);
+
     if (!this.fallbackEngineAudio) {
-      this.fallbackEngineAudio = new FallbackEngineAudio(this.ctx, this.masterGain);
+      this.fallbackEngineAudio = new FallbackEngineAudio(this.ctx, this.sfxGain);
       this.fallbackEngineAudio.start();
     }
 
     if (!this.windAudio) {
-      this.windAudio = new WindAudio(this.ctx, this.masterGain);
+      this.windAudio = new WindAudio(this.ctx, this.sfxGain);
       this.windAudio.start();
     }
 
@@ -117,6 +128,31 @@ export class AudioManager {
         0.05
       );
     }
+  }
+
+  public setSfxVolume(vol: number): void {
+    if (this.sfxGain && this.ctx) {
+      this.sfxGain.gain.setTargetAtTime(
+        Math.max(0, Math.min(1, vol)),
+        this.ctx.currentTime,
+        0.05
+      );
+    }
+  }
+
+  public setMusicVolume(vol: number): void {
+    this.musicManager.setVolume(vol);
+  }
+
+  public setMuted(muted: boolean): void {
+    if (this.masterGain && this.ctx) {
+      this.masterGain.gain.setTargetAtTime(
+        muted ? 0 : 0.85,
+        this.ctx.currentTime,
+        0.05
+      );
+    }
+    this.musicManager.setMuted(muted);
   }
 
   public isSuspended(): boolean {

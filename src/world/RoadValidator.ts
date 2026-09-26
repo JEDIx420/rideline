@@ -93,4 +93,60 @@ export class RoadValidator {
 
     return { valid: true, maxCurvature, maxGrade };
   }
+
+  /**
+   * Checks candidate new section points against existing historical road points
+   * to ensure no self-crossings, near-crossings or overlapping road ribbons.
+   */
+  public static checkIntersections(
+    historicalPoints: Vector3[],
+    newPoints: Vector3[],
+    minClearance: number = 24.0
+  ): boolean {
+    if (historicalPoints.length < 2 || newPoints.length < 2) return true;
+
+    // We check all new segments against all historical segments except the immediate connection
+    const nHist = historicalPoints.length;
+    const nNew = newPoints.length;
+
+    for (let j = 0; j < nNew - 1; j++) {
+      const b1 = newPoints[j];
+      const b2 = newPoints[j + 1];
+
+      // Exclude last 4 historical points to avoid checking connection boundary
+      for (let i = 0; i < nHist - 4; i++) {
+        const a1 = historicalPoints[i];
+        const a2 = historicalPoints[i + 1];
+
+        // 1. Check direct 2D line segment intersection in XZ plane
+        if (this.segmentsIntersect2D(a1.x, a1.z, a2.x, a2.z, b1.x, b1.z, b2.x, b2.z)) {
+          return false;
+        }
+
+        // 2. Proximity check for parallel/near overlap
+        const midA = a1.add(a2).scale(0.5);
+        const midB = b1.add(b2).scale(0.5);
+        const hDistSq = (midA.x - midB.x) ** 2 + (midA.z - midB.z) ** 2;
+        if (hDistSq < minClearance * minClearance) {
+          return false;
+        }
+      }
+    }
+
+    return true;
+  }
+
+  private static segmentsIntersect2D(
+    x1: number, y1: number, x2: number, y2: number,
+    x3: number, y3: number, x4: number, y4: number
+  ): boolean {
+    const ccw = (ax: number, ay: number, bx: number, by: number, cx: number, cy: number) => {
+      return (cy - ay) * (bx - ax) > (by - ay) * (cx - ax);
+    };
+    return (
+      ccw(x1, y1, x3, y3, x4, y4) !== ccw(x2, y2, x3, y3, x4, y4) &&
+      ccw(x1, y1, x2, y2, x3, y3) !== ccw(x1, y1, x2, y2, x4, y4)
+    );
+  }
 }
+

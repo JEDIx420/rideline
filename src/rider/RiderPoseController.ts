@@ -20,7 +20,8 @@ export class RiderPoseController {
     dt: number,
     bike: BikeController,
     profile: RiderBikeProfile,
-    rig: RiderRig
+    rig: RiderRig,
+    lookAheadTangent?: Vector3
   ): void {
     const physics = bike.physics;
     const speedMps = physics.speedMps;
@@ -56,8 +57,16 @@ export class RiderPoseController {
     const targetPelvisZ = this.currentTuckFactor * profile.tuckPelvisOffset.z;
 
     // Head posture: lift chin when tucked, turn head towards corner exit
+    let roadGlanceYaw = 0;
+    if (lookAheadTangent) {
+      const bikeFwdX = -Math.sin(physics.headingRad);
+      const bikeFwdZ = -Math.cos(physics.headingRad);
+      const crossY = bikeFwdX * lookAheadTangent.z - bikeFwdZ * lookAheadTangent.x;
+      roadGlanceYaw = Math.max(-0.45, Math.min(0.45, crossY * 0.85));
+    }
+
     const targetHeadPitch = -targetSpinePitch * 0.72 + 0.12;
-    const targetHeadYaw = -lean * 0.28;
+    const targetHeadYaw = -lean * 0.28 + roadGlanceYaw;
     const targetHeadRoll = -targetSpineRoll * 0.50; // Counter-bank head to keep horizon level
 
     // 5. Smooth Interpolation

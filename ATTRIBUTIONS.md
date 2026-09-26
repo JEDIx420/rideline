@@ -32,6 +32,33 @@ RIDELINE is an experimental, non-commercial 3D motorcycle riding simulator proto
 
 ---
 
+## Environment & Scenery Assets
+
+### 1. Autoshop 01 Studio HDRI
+- **Author:** Poly Haven
+- **Source:** [Poly Haven - Autoshop 01](https://polyhaven.com/a/autoshop_01)
+- **License:** CC0 Public Domain
+
+### 2. Streamed Boulders & Rock 07
+- **Author:** Poly Haven
+- **Source:** [Poly Haven - Rock 07](https://polyhaven.com/a/rock_07)
+- **License:** CC0 Public Domain
+
+### 3. Streamed Pine / Alpine Trees
+- **Author:** Kenney / Poly Haven
+- **License:** CC0 Public Domain
+
+---
+
+## Music & Audio
+
+### 1. High-Energy Motorsport / Loading Soundtrack
+- **Engine / Composition:** High-octane 132 BPM procedural synthesizer engine implemented via W3C Web Audio API.
+- **License:** CC0 1.0 Universal (Public Domain Dedication)
+- **Features:** Four-on-the-floor kick, 16th-note analog rolling bass sequence, resonant filter modulation, stereo arpeggiated synth leads, and automatic crossfading into motorcycle engine ignition.
+
+---
+
 ## Technology Stack
 
 - **Babylon.js**: Apache License 2.0 (Babylon.js Team / Microsoft)

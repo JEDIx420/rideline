@@ -1,6 +1,6 @@
 import { Scene } from '@babylonjs/core/scene';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
-import { WorldSurfaceQuery } from './WorldSurfaceQuery';
+import { WorldSurfaceQuery, WorldSurfaceQueryProvider, RoadProgressHint } from './WorldSurfaceQuery';
 import { RoadDirector } from './RoadDirector';
 import { RoadChunkManager } from './RoadChunkManager';
 import { TerrainChunkManager } from './TerrainChunkManager';
@@ -8,7 +8,7 @@ import { BiomeDirector } from './BiomeDirector';
 import { ScenerySpawner } from './ScenerySpawner';
 import { AtmosphereDirector } from './AtmosphereDirector';
 
-export class WorldDirector {
+export class WorldDirector implements WorldSurfaceQueryProvider {
   public roadDirector: RoadDirector;
   public roadChunkManager: RoadChunkManager;
   public terrainChunkManager: TerrainChunkManager;
@@ -43,7 +43,10 @@ export class WorldDirector {
     // 2. Stream terrain chunks around player
     this.terrainChunkManager.update(playerPos);
 
-    // 3. Biome transitions and dynamic lighting/fog
+    // 3. Stream real vegetation & boulder scenery
+    this.scenerySpawner.update(roadPt.distanceAlongRoad);
+
+    // 4. Biome transitions and dynamic lighting/fog
     this.biomeDirector.update(roadPt.distanceAlongRoad);
     this.atmosphereDirector.applyBiome(this.biomeDirector.currentBiome, dt);
   }
@@ -52,9 +55,22 @@ export class WorldDirector {
    * Evaluates the WorldSurfaceQuery contract at any arbitrary world coordinate.
    * Eliminates floating roads and nether limbo unconditionally.
    */
-  public querySurface(pos: Vector3): WorldSurfaceQuery {
-    const roadPt = this.roadDirector.getClosestPoint(pos);
+  public sampleSurface(pos: Vector3, hint?: RoadProgressHint): WorldSurfaceQuery {
+    return this.querySurface(pos, hint);
+  }
+
+  public getSpawnTransform(): { position: Vector3; headingRad: number; normal: Vector3 } {
+    return this.roadDirector.getSpawnTransform();
+  }
+
+  public getLookAheadTangent(distanceAlongRoad: number, lookAheadMeters: number): Vector3 {
+    return this.roadDirector.getLookAheadTangent(distanceAlongRoad, lookAheadMeters);
+  }
+
+  public querySurface(pos: Vector3, hint?: RoadProgressHint): WorldSurfaceQuery {
+    const roadPt = this.roadDirector.getClosestPoint(pos, hint);
     const distToCenter = roadPt.distanceToCenter;
+
 
     const halfRoadWidth = this.roadChunkManager.roadWidth * 0.5; // ~4.6m
     const shoulderWidth = this.roadChunkManager.shoulderWidth;   // ~2.2m
@@ -75,6 +91,9 @@ export class WorldDirector {
         roadDistance: roadPt.distanceAlongRoad,
         camberAngleRad: roadPt.camberAngleRad,
         recoveryPoint: safeRecoveryPoint,
+        roadSampleIndex: roadPt.sampleIndex,
+        distanceToCenter: distToCenter,
+        lateralOffset: roadPt.lateralOffset,
       };
     }
 
@@ -94,6 +113,9 @@ export class WorldDirector {
         roadDistance: roadPt.distanceAlongRoad,
         camberAngleRad: 0,
         recoveryPoint: safeRecoveryPoint,
+        roadSampleIndex: roadPt.sampleIndex,
+        distanceToCenter: distToCenter,
+        lateralOffset: roadPt.lateralOffset,
       };
     }
 
@@ -110,6 +132,9 @@ export class WorldDirector {
         roadDistance: roadPt.distanceAlongRoad,
         camberAngleRad: roadPt.camberAngleRad,
         recoveryPoint: safeRecoveryPoint,
+        roadSampleIndex: roadPt.sampleIndex,
+        distanceToCenter: distToCenter,
+        lateralOffset: roadPt.lateralOffset,
       };
     }
 
@@ -130,6 +155,9 @@ export class WorldDirector {
         roadDistance: roadPt.distanceAlongRoad,
         camberAngleRad: roadPt.camberAngleRad * (1.0 - t),
         recoveryPoint: safeRecoveryPoint,
+        roadSampleIndex: roadPt.sampleIndex,
+        distanceToCenter: distToCenter,
+        lateralOffset: roadPt.lateralOffset,
       };
     }
 
@@ -148,6 +176,9 @@ export class WorldDirector {
       roadDistance: roadPt.distanceAlongRoad,
       camberAngleRad: 0,
       recoveryPoint: safeRecoveryPoint,
+      roadSampleIndex: roadPt.sampleIndex,
+      distanceToCenter: distToCenter,
+      lateralOffset: roadPt.lateralOffset,
     };
   }
 

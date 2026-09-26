@@ -1,8 +1,6 @@
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector';
 import { BikePhysicsConfig } from '../config/physics';
-import { Road } from '../world/Road';
-
-import { Terrain, SurfaceContactInfo } from '../world/Terrain';
+import { WorldSurfaceQuery, WorldSurfaceQueryProvider, RoadProgressHint } from '../world/WorldSurfaceQuery';
 
 export class BikePhysics {
   public position: Vector3 = new Vector3(0, 0, 0);
@@ -10,14 +8,15 @@ export class BikePhysics {
   public speedMps: number = 0; // Speed in m/s
   public accelerationMps2: number = 0;
 
-  public headingRad: number = 0; // Yaw angle in radians (0 = along -Z)
-  public leanAngleRad: number = 0; // Roll / lean angle (positive = leaning right)
+  public headingRad: number = 0; // Yaw angle in radians (0 = along -Z, negative = right, positive = left)
+  public leanAngleRad: number = 0; // Roll / lean angle (positive = leaning right, negative = leaning left)
   public targetLeanRad: number = 0;
   public steerAngleRad: number = 0; // Visual steering angle of front forks
   public pitchAngleRad: number = 0; // Pitch angle along road/surface incline
 
   public suspensionPitch: number = 0; // Dynamic pitch squat/dive
-  public surfaceContact: SurfaceContactInfo | null = null;
+  public surfaceContact: WorldSurfaceQuery | null = null;
+  public roadProgressHint: RoadProgressHint = { isTeleport: true };
 
   private readonly AIR_DENSITY = 1.225; // kg/m^3
   private readonly GRAVITY = 9.81; // m/s^2
@@ -36,6 +35,7 @@ export class BikePhysics {
     this.pitchAngleRad = 0;
     this.suspensionPitch = 0;
     this.surfaceContact = null;
+    this.roadProgressHint = { isTeleport: true };
   }
 
   public update(
@@ -45,25 +45,17 @@ export class BikePhysics {
     steerInput: number, // -1 (left) to +1 (right)
     engineTorqueNm: number,
     totalGearRatio: number,
-    road: Road,
-    terrain?: Terrain
+    surfaceProvider: WorldSurfaceQueryProvider
   ): void {
-    // 0. Surface Contact Detection
-    let surface: SurfaceContactInfo;
-    if (terrain) {
-      surface = terrain.getSurfaceContact(this.position, road);
-    } else {
-      const roadPoint = road.getClosestPoint(this.position);
-      surface = {
-        elevation: roadPoint.position.y,
-        normal: roadPoint.normal,
-        surfaceType: 'asphalt',
-        frictionMultiplier: 1.0,
-        dragMultiplier: 1.0,
-        pitch: roadPoint.pitch,
-      };
-    }
+    // 0. Surface Contact Detection via WorldSurfaceQueryProvider
+    const surface = surfaceProvider.sampleSurface(this.position, this.roadProgressHint);
     this.surfaceContact = surface;
+    this.roadProgressHint = {
+      lastSampleIndex: surface.roadSampleIndex,
+      lastDistance: surface.roadDistance,
+      isTeleport: false,
+    };
+
 
     // 1. Longitudinal Forces & Acceleration
     const driveForce = (engineTorqueNm * totalGearRatio) / this.config.wheelRadiusMeters;
@@ -139,8 +131,8 @@ export class BikePhysics {
 
     // Visual fork steering angle (turns into turn at low speed, countersteer flick at high speed)
     const visualSteerTarget =
-      (1.0 - speedFactor) * (-steerInput * 0.5) +
-      speedFactor * (-this.leanAngleRad * 0.15 + steerInput * 0.08);
+      (1.0 - speedFactor) * (steerInput * 0.4) +
+      speedFactor * (-this.leanAngleRad * 0.12 + steerInput * 0.06);
     this.steerAngleRad += (visualSteerTarget - this.steerAngleRad) * Math.min(1.0, dt * 10.0);
 
     // 3. World Position Update
@@ -159,30 +151,23 @@ export class BikePhysics {
     this.suspensionPitch += (targetSuspensionPitch - this.suspensionPitch) * Math.min(1.0, dt * 12.0);
 
     // 6. Soft Road Edge Collision Boundary & Safety Auto-Recovery
-    const roadPoint = road.getClosestPoint(this.position);
-    const distFromCenter = roadPoint.distanceToCenter;
-    const roadHalfWidth = road.width * 0.5 + 2.0; // Road width + gravel shoulder
+    const distFromCenter = surface.distanceToCenter;
+    const roadHalfWidth = 4.6 + 2.2; // Two 4.2m lanes + shoulder
 
-    if (surface.surfaceType === 'out_of_bounds' || distFromCenter > 45.0) {
+    if (surface.surfaceType === 'out_of_bounds' || distFromCenter > 50.0) {
       // Emergency recovery corridor: smoothly glide bike back to road edge
-      const toRoad = roadPoint.position.subtract(this.position);
+      const toRoad = surface.recoveryPoint.subtract(this.position);
       toRoad.y = 0;
       const pullSpeed = Math.min(22.0, toRoad.length() * 2.0);
       const pullDir = toRoad.normalize();
       this.position.x += pullDir.x * pullSpeed * dt;
       this.position.z += pullDir.z * pullSpeed * dt;
       this.speedMps = Math.max(0, this.speedMps - 20.0 * dt);
-      const targetHeading = Math.atan2(-roadPoint.tangent.x, -roadPoint.tangent.z);
+      const targetHeading = Math.atan2(-surface.roadTangent.x, -surface.roadTangent.z);
       this.headingRad += (targetHeading - this.headingRad) * Math.min(1.0, dt * 6.0);
     } else if (distFromCenter > roadHalfWidth && surface.surfaceType !== 'water') {
       // Off-road drag & mild slide friction
       this.speedMps = Math.max(0, this.speedMps - 8.0 * dt);
-      // Gently deflect heading back toward road center
-      const toRoadCenter = roadPoint.position.subtract(this.position).normalize();
-      const dot = forwardX * toRoadCenter.x + forwardZ * toRoadCenter.z;
-      if (dot < 0.5) {
-        this.headingRad += Math.sign(-steerInput || 1) * 1.5 * dt;
-      }
     }
   }
 

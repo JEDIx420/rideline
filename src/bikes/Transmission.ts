@@ -7,6 +7,7 @@ export class Transmission {
   public shiftState: ShiftState = 'IN_GEAR';
   public isShifting: boolean = false;
   public isTorqueCut: boolean = false;
+  public lastShiftDirection: 'up' | 'down' | 'none' = 'none';
 
   public timeSinceLastShiftSec: number = 999;
   public preShiftRpm: number = 0;
@@ -144,6 +145,7 @@ export class Transmission {
     this.preShiftRpm = currentRpm;
     this.postShiftTargetRpm = this.calculateRpmForGear(speedMps, wheelRadiusM, targetGear);
     this.timeSinceLastShiftSec = 0;
+    this.lastShiftDirection = isUpshift ? 'up' : 'down';
 
     if (isUpshift) {
       // Upshifts initiate with torque cut

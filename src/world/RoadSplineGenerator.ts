@@ -9,7 +9,10 @@ export interface RoadSamplePoint {
   camberAngleRad: number; // Super-elevation banking on turns
   curvature: number;      // 1 / radius
   distanceAlongRoad: number;
+  sampleIndex: number;
+  sectionId: number;
 }
+
 
 export class RoadSplineGenerator {
   /**
@@ -66,16 +69,43 @@ export class RoadSplineGenerator {
    */
   public static generateSplineSamples(
     controlPoints: Vector3[],
-    stepDistance: number = 2.5
+    stepDistance: number = 2.5,
+    sectionId: number = 0
   ): RoadSamplePoint[] {
-    if (controlPoints.length < 4) return [];
+    return this.generateSectionSamples(
+      controlPoints,
+      0,
+      Math.max(0, controlPoints.length - 3),
+      stepDistance,
+      0,
+      0,
+      sectionId
+    );
+  }
+
+  /**
+   * Generates samples for a specific range of segments from a control points list.
+   * Enables append-only road expansion where historical samples remain completely immutable.
+   */
+  public static generateSectionSamples(
+    controlPoints: Vector3[],
+    startSegment: number,
+    numSegments: number,
+    stepDistance: number = 2.5,
+    initialDistance: number = 0,
+    initialSampleIndex: number = 0,
+    sectionId: number = 0
+  ): RoadSamplePoint[] {
+    if (controlPoints.length < 4 || numSegments <= 0) return [];
 
     const samples: RoadSamplePoint[] = [];
-    let accumulatedDistance = 0;
-    const n = controlPoints.length;
+    let accumulatedDistance = initialDistance;
+    let sampleIndex = initialSampleIndex;
+    let lastPos: Vector3 | null = null;
 
-    // Approximate chord length of each segment
-    for (let i = 0; i < n - 3; i++) {
+    const maxSegment = Math.min(controlPoints.length - 3, startSegment + numSegments);
+
+    for (let i = startSegment; i < maxSegment; i++) {
       const p0 = controlPoints[i];
       const p1 = controlPoints[i + 1];
       const p2 = controlPoints[i + 2];
@@ -84,7 +114,10 @@ export class RoadSplineGenerator {
       const segmentChord = Vector3.Distance(p1, p2);
       const subSteps = Math.max(4, Math.ceil(segmentChord / stepDistance));
 
-      for (let s = 0; s < subSteps; s++) {
+      // For subsequent segments, skip s=0 to prevent duplicate boundary points
+      const startS = (i === startSegment && initialSampleIndex === 0) ? 0 : 1;
+
+      for (let s = startS; s <= subSteps; s++) {
         const t = s / subSteps;
         const pos = RoadSplineGenerator.catmullRomPosition(p0, p1, p2, p3, t);
         const tangent = RoadSplineGenerator.catmullRomTangent(p0, p1, p2, p3, t);
@@ -95,9 +128,7 @@ export class RoadSplineGenerator {
         const curvature = vCrossA.length();
 
         // Camber / Banking angle: turns inwards into the corner
-        // Turn direction given by sign of horizontal cross product
         const turnDir = Math.sign(tangent.x * accel.z - tangent.z * accel.x);
-        // Superelevation formula: theta ~ min(0.12, v^2 * kappa / g)
         const camberAngleRad = Math.min(0.08, curvature * 0.45) * turnDir;
 
         // Normal perpendicular to tangent, banking with camber
@@ -106,9 +137,10 @@ export class RoadSplineGenerator {
 
         const pitch = Math.atan2(tangent.y, Math.sqrt(tangent.x * tangent.x + tangent.z * tangent.z));
 
-        if (samples.length > 0) {
-          accumulatedDistance += Vector3.Distance(samples[samples.length - 1].position, pos);
+        if (lastPos) {
+          accumulatedDistance += Vector3.Distance(lastPos, pos);
         }
+        lastPos = pos.clone();
 
         samples.push({
           position: pos,
@@ -119,6 +151,8 @@ export class RoadSplineGenerator {
           camberAngleRad,
           curvature,
           distanceAlongRoad: accumulatedDistance,
+          sampleIndex: sampleIndex++,
+          sectionId,
         });
       }
     }
@@ -126,3 +160,4 @@ export class RoadSplineGenerator {
     return samples;
   }
 }
+

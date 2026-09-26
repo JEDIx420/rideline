@@ -4,8 +4,7 @@ import { BikePhysics } from './BikePhysics';
 import { EngineModel } from './EngineModel';
 import { Transmission } from './Transmission';
 import { BikeVisualController } from './BikeVisualController';
-import { Road } from '../world/Road';
-import { Terrain } from '../world/Terrain';
+import { WorldSurfaceQueryProvider } from '../world/WorldSurfaceQuery';
 import { RiderController } from '../rider/RiderController';
 import { LoadedBike } from './BikeLoader';
 
@@ -16,6 +15,7 @@ export class BikeController {
   public visual: BikeVisualController;
   public rider: RiderController | null = null;
   public loadedBike: LoadedBike | null = null;
+  public lastInputs = { throttle: 0, brake: 0, steer: 0 };
 
   constructor(
     public definition: BikeDefinition,
@@ -50,8 +50,7 @@ export class BikeController {
     throttleInput: number,
     brakeInput: number,
     steerInput: number,
-    road: Road,
-    terrain?: Terrain
+    surfaceProvider: WorldSurfaceQueryProvider
   ): void {
     // 1. Transmission & Automatic Gear shifting (sequential state machine)
     this.transmission.update(
@@ -82,6 +81,10 @@ export class BikeController {
     const engineTorque = this.engine.getTorque(this.transmission.isTorqueCut);
     const totalRatio = this.transmission.getTotalRatio();
 
+    this.lastInputs.throttle = throttleInput;
+    this.lastInputs.brake = brakeInput;
+    this.lastInputs.steer = steerInput;
+
     this.physics.update(
       dt,
       throttleInput,
@@ -89,8 +92,7 @@ export class BikeController {
       steerInput,
       engineTorque,
       totalRatio,
-      road,
-      terrain
+      surfaceProvider
     );
 
     // 4. Visual updates (wheels, forks, roll lean, pitch)
@@ -98,7 +100,7 @@ export class BikeController {
 
     // 5. Rider Posture update
     if (this.rider) {
-      this.rider.update(dt, this);
+      this.rider.update(dt, this, surfaceProvider);
     }
   }
 
