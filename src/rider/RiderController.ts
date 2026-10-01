@@ -5,9 +5,9 @@ import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator'
 import { RiderLoader } from './RiderLoader';
 import { RiderRig } from './RiderRig';
 import { RiderPoseController } from './RiderPoseController';
+import { RiderPoseGraph } from './RiderPoseGraph';
 import { CANONICAL_RIDER_DEFINITION } from './RiderDefinition';
 import { RiderBikeProfile, getRiderBikeProfile } from './RiderBikeProfile';
-import { RiderIK } from './RiderIK';
 import { BikeController } from '../bikes/BikeController';
 import { WorldSurfaceQueryProvider } from '../world/WorldSurfaceQuery';
 
@@ -16,6 +16,7 @@ export class RiderController {
   public rig: RiderRig;
   public profile: RiderBikeProfile;
   public poseController: RiderPoseController;
+  public poseGraph: RiderPoseGraph;
 
   public static async create(
     scene: Scene,
@@ -42,6 +43,7 @@ export class RiderController {
     this.rig = rig;
     this.profile = profile;
     this.poseController = new RiderPoseController();
+    this.poseGraph = new RiderPoseGraph();
   }
 
   public bikeTargets: {
@@ -102,34 +104,27 @@ export class RiderController {
         30.0
       );
     }
-    this.poseController.update(dt, bike, this.profile, this.rig, lookAheadTangent);
 
-    // 2. Dynamic Pelvis offset on seat (tuck shift + lean shift)
-    this.rootNode.position.set(
-      this.baseMountPosition.x + this.poseController.currentPelvisOffset.x,
-      this.baseMountPosition.y + this.poseController.currentPelvisOffset.y,
-      this.baseMountPosition.z + this.poseController.currentPelvisOffset.z
-    );
-
-    // 3. Solve limb IK every frame after motorcycle targets have updated
-    const steerAngleRad = bike.physics.steerAngleRad;
     const targets = this.bikeTargets || (bike.loadedBike ? bike.loadedBike.riderTargets : null);
 
-    const shiftDuration = 0.25;
-    const isShifting = bike.transmission.timeSinceLastShiftSec < shiftDuration;
-    const shiftAction = isShifting ? bike.transmission.lastShiftDirection : 'none';
-    const shiftProgress = isShifting ? Math.min(1.0, bike.transmission.timeSinceLastShiftSec / shiftDuration) : 0;
+    // 2. Evaluate modular 5-layer RiderPoseGraph
+    this.poseGraph.evaluate(dt, bike, this.profile, this.rig, targets, lookAheadTangent);
 
-    RiderIK.applyLimbIK(
-      this.rig,
-      this.profile,
-      steerAngleRad,
-      targets,
-      bike.physics.leanAngleRad,
-      bike.lastInputs.throttle,
-      bike.lastInputs.brake,
-      shiftAction,
-      shiftProgress
+    // Sync poseController for backward compatibility
+    this.poseController.currentSpinePitch = this.poseGraph.state.spinePitch;
+    this.poseController.currentSpineRoll = this.poseGraph.state.spineRoll;
+    this.poseController.currentSpineYaw = this.poseGraph.state.spineYaw;
+    this.poseController.currentHeadPitch = this.poseGraph.state.headPitch;
+    this.poseController.currentHeadYaw = this.poseGraph.state.headYaw;
+    this.poseController.currentHeadRoll = this.poseGraph.state.headRoll;
+    this.poseController.currentPelvisOffset.copyFrom(this.poseGraph.state.pelvisOffset);
+    this.poseController.currentTuckFactor = this.poseGraph.state.tuckFactor;
+
+    // 3. Dynamic Pelvis offset on seat (tuck shift + lean shift)
+    this.rootNode.position.set(
+      this.baseMountPosition.x + this.poseGraph.state.pelvisOffset.x,
+      this.baseMountPosition.y + this.poseGraph.state.pelvisOffset.y,
+      this.baseMountPosition.z + this.poseGraph.state.pelvisOffset.z
     );
   }
 

@@ -2,9 +2,9 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { RoadSplineGenerator, RoadSamplePoint } from './RoadSplineGenerator';
 import { RoadSectionPlanner } from './RoadSectionPlanner';
 import { RoadValidator } from './RoadValidator';
-import { RoadProgressHint } from './WorldSurfaceQuery';
+import { RoadProgressHint, RoadProgressState } from './WorldSurfaceQuery';
 
-export interface RoadClosestPoint {
+export interface RoadClosestPoint extends RoadProgressState {
   position: Vector3;
   tangent: Vector3;
   normal: Vector3;
@@ -35,7 +35,8 @@ export class RoadDirector {
   }
 
   /**
-   * Initializes the road with the canonical 750m vertical slice benchmark road.
+   * Initializes the road with the canonical 750m vertical slice benchmark road,
+   * followed by 28 km of pre-generated continuous coastal corridors.
    */
   private initBenchmarkCorridor(): void {
     const pts: [number, number, number][] = [
@@ -65,8 +66,12 @@ export class RoadDirector {
       this.totalLength = this.splineSamples[this.splineSamples.length - 1].distanceAlongRoad;
     }
 
-    // Append 3.5 km ahead seamlessly without mutating benchmark samples
-    this.extendRoadAhead(3500.0);
+    // Pre-generate 28 km ahead seamlessly upfront for 10 minutes of uninterrupted continuous riding
+    let extensions = 0;
+    while (this.totalLength < 28000.0 && extensions < 20) {
+      this.extendRoadAhead(2000.0);
+      extensions++;
+    }
   }
 
   /**
@@ -132,7 +137,8 @@ export class RoadDirector {
   }
 
   /**
-   * Fast spatial lookup: finds closest road point, signed lateral offset, and surface data.
+   * Fast spatial lookup: finds continuous closest road point, signed lateral offset, and surface data.
+   * Continuous projection onto adjacent road spline segments eliminates discrete elevation step jumps.
    * Uses bounded search around hint to prevent snapping to geographically nearby road loops.
    */
   public getClosestPoint(pos: Vector3, hint?: RoadProgressHint | number): RoadClosestPoint {
@@ -141,9 +147,13 @@ export class RoadDirector {
     if (n === 0) {
       return {
         position: pos.clone(),
+        continuousPosition: pos.clone(),
         tangent: new Vector3(0, 0, -1),
+        continuousTangent: new Vector3(0, 0, -1),
         normal: Vector3.Up(),
+        continuousNormal: Vector3.Up(),
         binormal: Vector3.Right(),
+        continuousBinormal: Vector3.Right(),
         pitch: 0,
         camberAngleRad: 0,
         curvature: 0,
@@ -151,6 +161,9 @@ export class RoadDirector {
         distanceToCenter: 0,
         lateralOffset: 0,
         sampleIndex: 0,
+        segmentIndex: 0,
+        segmentT: 0,
+        elevation: pos.y,
         sectionId: 0,
       };
     }
@@ -205,26 +218,77 @@ export class RoadDirector {
       }
     }
 
-    const sample = samples[bestIndex];
-    const toPos = pos.subtract(sample.position);
-    const distanceToCenter = Math.sqrt(minSqDist);
+    // Continuous projection onto adjacent segments
+    let chosenSegStart = bestIndex;
+    let chosenT = 0;
+    let chosenProj = samples[bestIndex].position.clone();
+    let minProjDistSq = Vector3.DistanceSquared(pos, chosenProj);
 
-    // Signed lateral offset: dot product with binormal (lateral axis)
-    const lateralOffset = Vector3.Dot(toPos, sample.binormal);
+    const checkSegment = (idx0: number, idx1: number) => {
+      if (idx0 < 0 || idx1 >= n || idx0 >= idx1) return;
+      const p0 = samples[idx0].position;
+      const p1 = samples[idx1].position;
+      const segVec = p1.subtract(p0);
+      const segLenSq = segVec.lengthSquared();
+      if (segLenSq < 1e-6) return;
+
+      const toPos = pos.subtract(p0);
+      let t = Vector3.Dot(toPos, segVec) / segLenSq;
+      t = Math.max(0, Math.min(1, t));
+      const proj = p0.add(segVec.scale(t));
+      const dSq = Vector3.DistanceSquared(pos, proj);
+      if (dSq < minProjDistSq) {
+        minProjDistSq = dSq;
+        chosenSegStart = idx0;
+        chosenT = t;
+        chosenProj = proj;
+      }
+    };
+
+    if (bestIndex > 0) {
+      checkSegment(bestIndex - 1, bestIndex);
+    }
+    if (bestIndex < n - 1) {
+      checkSegment(bestIndex, bestIndex + 1);
+    }
+
+    const s0 = samples[chosenSegStart];
+    const s1 = chosenSegStart + 1 < n ? samples[chosenSegStart + 1] : s0;
+    const t = chosenT;
+
+    const continuousTangent = Vector3.Lerp(s0.tangent, s1.tangent, t).normalize();
+    const continuousNormal = Vector3.Lerp(s0.normal, s1.normal, t).normalize();
+    const continuousBinormal = Vector3.Lerp(s0.binormal, s1.binormal, t).normalize();
+    const pitch = s0.pitch * (1 - t) + s1.pitch * t;
+    const camberAngleRad = s0.camberAngleRad * (1 - t) + s1.camberAngleRad * t;
+    const curvature = s0.curvature * (1 - t) + s1.curvature * t;
+    const distanceAlongRoad = s0.distanceAlongRoad + t * (s1.distanceAlongRoad - s0.distanceAlongRoad);
+    const distanceToCenter = Math.sqrt(minProjDistSq);
+
+    const toPosFromProj = pos.subtract(chosenProj);
+    const lateralOffset = Vector3.Dot(toPosFromProj, continuousBinormal);
+    const sectionId = t < 0.5 ? s0.sectionId : s1.sectionId;
 
     return {
-      position: sample.position,
-      tangent: sample.tangent,
-      normal: sample.normal,
-      binormal: sample.binormal,
-      pitch: sample.pitch,
-      camberAngleRad: sample.camberAngleRad,
-      curvature: sample.curvature,
-      distanceAlongRoad: sample.distanceAlongRoad,
+      position: chosenProj,
+      continuousPosition: chosenProj,
+      tangent: continuousTangent,
+      continuousTangent,
+      normal: continuousNormal,
+      continuousNormal,
+      binormal: continuousBinormal,
+      continuousBinormal,
+      pitch,
+      camberAngleRad,
+      curvature,
+      distanceAlongRoad,
       distanceToCenter,
       lateralOffset,
-      sampleIndex: bestIndex,
-      sectionId: sample.sectionId,
+      sampleIndex: chosenSegStart,
+      segmentIndex: chosenSegStart,
+      segmentT: t,
+      elevation: chosenProj.y,
+      sectionId,
     };
   }
 
@@ -272,9 +336,9 @@ export class RoadDirector {
    */
   public updatePlayerProgress(playerRoadDist: number): void {
     const remainingDistance = this.totalLength - playerRoadDist;
-    // Keep at least 3.5 km planned ahead
-    if (remainingDistance < 3500.0) {
-      this.extendRoadAhead(2000.0);
+    // Keep at least 6.0 km planned ahead
+    if (remainingDistance < 6000.0) {
+      this.extendRoadAhead(3000.0);
     }
   }
 }

@@ -1,6 +1,7 @@
 import { Vector3, Quaternion } from '@babylonjs/core/Maths/math.vector';
 import { BikePhysicsConfig } from '../config/physics';
-import { WorldSurfaceQuery, WorldSurfaceQueryProvider, RoadProgressHint } from '../world/WorldSurfaceQuery';
+import { WorldSurfaceQuery, WorldSurfaceQueryProvider, RoadProgressHint, RoadProgressState } from '../world/WorldSurfaceQuery';
+import { RecoveryStateMachine } from './RecoveryStateMachine';
 
 export class BikePhysics {
   public position: Vector3 = new Vector3(0, 0, 0);
@@ -16,7 +17,9 @@ export class BikePhysics {
 
   public suspensionPitch: number = 0; // Dynamic pitch squat/dive
   public surfaceContact: WorldSurfaceQuery | null = null;
+  public roadProgress: RoadProgressState | null = null;
   public roadProgressHint: RoadProgressHint = { isTeleport: true };
+  public recovery: RecoveryStateMachine = new RecoveryStateMachine();
 
   private readonly AIR_DENSITY = 1.225; // kg/m^3
   private readonly GRAVITY = 9.81; // m/s^2
@@ -35,7 +38,15 @@ export class BikePhysics {
     this.pitchAngleRad = 0;
     this.suspensionPitch = 0;
     this.surfaceContact = null;
+    this.roadProgress = null;
     this.roadProgressHint = { isTeleport: true };
+    this.recovery.reset();
+  }
+
+  public triggerManualRecovery(): void {
+    if (this.surfaceContact) {
+      this.recovery.triggerManual(this.position, this.surfaceContact, this.headingRad);
+    }
   }
 
   public update(
@@ -50,12 +61,12 @@ export class BikePhysics {
     // 0. Surface Contact Detection via WorldSurfaceQueryProvider
     const surface = surfaceProvider.sampleSurface(this.position, this.roadProgressHint);
     this.surfaceContact = surface;
+    this.roadProgress = surface.progressState || null;
     this.roadProgressHint = {
       lastSampleIndex: surface.roadSampleIndex,
       lastDistance: surface.roadDistance,
       isTeleport: false,
     };
-
 
     // 1. Longitudinal Forces & Acceleration
     const driveForce = (engineTorqueNm * totalGearRatio) / this.config.wheelRadiusMeters;
@@ -90,26 +101,29 @@ export class BikePhysics {
     // Hard top-speed governor (~315 km/h / 87.5 m/s for S1000RR)
     this.speedMps = Math.min(87.5, this.speedMps);
 
-    // 2. Lateral Dynamics, Steering & Dynamic Lean
+    // 2. Lateral Dynamics, Steering Limiter & Dynamic Lean
     const speedKmh = this.speedMps * 3.6;
     const maxLeanDeg = surface.surfaceType === 'offroad' ? Math.min(28, this.config.maxLeanAngleDeg * 0.6) : this.config.maxLeanAngleDeg;
     const maxLeanRad = (maxLeanDeg * Math.PI) / 180;
 
     // Speed-dependent steering agility & countersteering response
     const speedFactor = Math.min(1.0, this.speedMps / 6.0); // 0 at stop, 1 above 22 km/h
+    const highSpeedSteerAuthority = Math.min(1.0, 50.0 / Math.max(20.0, speedKmh));
+    const effectiveSteerInput = steerInput * (0.5 + 0.5 * highSpeedSteerAuthority);
 
     // Target lean angle based on steering input and speed
-    if (Math.abs(steerInput) > 0.01) {
+    if (Math.abs(effectiveSteerInput) > 0.01) {
       // High speed: steering input directly commands lean angle
-      const leanDemand = steerInput * maxLeanRad;
+      const leanDemand = effectiveSteerInput * maxLeanRad;
       this.targetLeanRad = leanDemand * Math.min(1.0, (speedKmh + 15) / 60);
     } else {
       // Natural return to upright vertical stability
       this.targetLeanRad = 0;
     }
 
-    // Smooth lean roll transition
-    const leanRate = this.config.leanSpeed * (1.0 + speedFactor * 0.5) * surface.frictionMultiplier;
+    // Smooth lean roll transition with high-speed damper
+    const speedDamping = Math.min(0.35, (speedKmh / 200.0) * 0.35);
+    const leanRate = this.config.leanSpeed * (1.0 + speedFactor * 0.5 - speedDamping) * surface.frictionMultiplier;
     const leanDiff = this.targetLeanRad - this.leanAngleRad;
     this.leanAngleRad += leanDiff * Math.min(1.0, dt * leanRate);
 
@@ -142,7 +156,7 @@ export class BikePhysics {
     this.position.x += forwardX * this.speedMps * dt;
     this.position.z += forwardZ * this.speedMps * dt;
 
-    // 4. Surface Elevation & Pitch Snapping
+    // 4. Continuous Surface Elevation & Pitch Snapping (Zero Height Jumps)
     this.position.y = surface.elevation + this.config.groundContactOffsetY;
     this.pitchAngleRad = surface.pitch;
 
@@ -150,22 +164,26 @@ export class BikePhysics {
     const targetSuspensionPitch = (this.accelerationMps2 / 10.0) * this.config.suspensionStiffness;
     this.suspensionPitch += (targetSuspensionPitch - this.suspensionPitch) * Math.min(1.0, dt * 12.0);
 
-    // 6. Soft Road Edge Collision Boundary & Safety Auto-Recovery
-    const distFromCenter = surface.distanceToCenter;
-    const roadHalfWidth = 4.6 + 2.2; // Two 4.2m lanes + shoulder
+    // 6. Robust 4-State Recovery Machine
+    const rec = this.recovery.update(
+      dt,
+      this.position,
+      surface,
+      this.headingRad,
+      this.speedMps
+    );
 
-    if (surface.surfaceType === 'out_of_bounds' || distFromCenter > 50.0) {
-      // Emergency recovery corridor: smoothly glide bike back to road edge
-      const toRoad = surface.recoveryPoint.subtract(this.position);
-      toRoad.y = 0;
-      const pullSpeed = Math.min(22.0, toRoad.length() * 2.0);
-      const pullDir = toRoad.normalize();
-      this.position.x += pullDir.x * pullSpeed * dt;
-      this.position.z += pullDir.z * pullSpeed * dt;
-      this.speedMps = Math.max(0, this.speedMps - 20.0 * dt);
-      const targetHeading = Math.atan2(-surface.roadTangent.x, -surface.roadTangent.z);
-      this.headingRad += (targetHeading - this.headingRad) * Math.min(1.0, dt * 6.0);
-    } else if (distFromCenter > roadHalfWidth && surface.surfaceType !== 'water') {
+    if (rec.isRecovering && rec.blendedPosition && rec.blendedHeading !== undefined) {
+      this.position.x = rec.blendedPosition.x;
+      this.position.z = rec.blendedPosition.z;
+      this.position.y = surface.elevation + this.config.groundContactOffsetY;
+      this.headingRad = rec.blendedHeading;
+      if (rec.targetSpeedMps !== undefined) {
+        this.speedMps = rec.targetSpeedMps;
+      }
+      this.leanAngleRad *= 0.85;
+      this.targetLeanRad = 0;
+    } else if (surface.distanceToCenter > 3.6 + 1.8 && surface.surfaceType !== 'water') {
       // Off-road drag & mild slide friction
       this.speedMps = Math.max(0, this.speedMps - 8.0 * dt);
     }

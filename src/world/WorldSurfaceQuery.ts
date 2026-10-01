@@ -21,6 +21,22 @@ export interface WorldSurfaceQuery {
   roadSampleIndex: number;
   distanceToCenter: number;
   lateralOffset: number;
+  progressState?: RoadProgressState;
+}
+
+export interface RoadProgressState {
+  segmentIndex: number;
+  segmentT: number;
+  distanceAlongRoad: number;
+  lateralOffset: number;
+  distanceToCenter: number;
+  continuousPosition: Vector3;
+  continuousTangent: Vector3;
+  continuousNormal: Vector3;
+  continuousBinormal: Vector3;
+  elevation: number;
+  pitch: number;
+  camberAngleRad: number;
 }
 
 export interface RoadProgressHint {

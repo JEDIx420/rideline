@@ -1,6 +1,6 @@
 import { Scene } from '@babylonjs/core/scene';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
-import { WorldSurfaceQuery, WorldSurfaceQueryProvider, RoadProgressHint } from './WorldSurfaceQuery';
+import { WorldSurfaceQuery, WorldSurfaceQueryProvider, RoadProgressHint, RoadProgressState } from './WorldSurfaceQuery';
 import { RoadDirector } from './RoadDirector';
 import { RoadChunkManager } from './RoadChunkManager';
 import { TerrainChunkManager } from './TerrainChunkManager';
@@ -32,22 +32,23 @@ export class WorldDirector implements WorldSurfaceQueryProvider {
 
   /**
    * Main frame update: streams road chunks ahead, streams terrain, updates biomes & lighting.
+   * If authoritative RoadProgressState is provided by bike physics, skips redundant spatial queries.
    */
-  public update(playerPos: Vector3, dt: number): void {
-    const roadPt = this.roadDirector.getClosestPoint(playerPos);
+  public update(playerPos: Vector3, dt: number, progress?: RoadProgressState): void {
+    const roadDist = progress ? progress.distanceAlongRoad : this.roadDirector.getClosestPoint(playerPos).distanceAlongRoad;
 
     // 1. Extend road planning and stream road ribbon chunks
-    this.roadDirector.updatePlayerProgress(roadPt.distanceAlongRoad);
-    this.roadChunkManager.update(roadPt.distanceAlongRoad);
+    this.roadDirector.updatePlayerProgress(roadDist);
+    this.roadChunkManager.update(roadDist);
 
     // 2. Stream terrain chunks around player
     this.terrainChunkManager.update(playerPos);
 
     // 3. Stream real vegetation & boulder scenery
-    this.scenerySpawner.update(roadPt.distanceAlongRoad);
+    this.scenerySpawner.update(roadDist);
 
     // 4. Biome transitions and dynamic lighting/fog
-    this.biomeDirector.update(roadPt.distanceAlongRoad);
+    this.biomeDirector.update(roadDist);
     this.atmosphereDirector.applyBiome(this.biomeDirector.currentBiome, dt);
   }
 
@@ -94,6 +95,7 @@ export class WorldDirector implements WorldSurfaceQueryProvider {
         roadSampleIndex: roadPt.sampleIndex,
         distanceToCenter: distToCenter,
         lateralOffset: roadPt.lateralOffset,
+        progressState: roadPt,
       };
     }
 
@@ -116,13 +118,15 @@ export class WorldDirector implements WorldSurfaceQueryProvider {
         roadSampleIndex: roadPt.sampleIndex,
         distanceToCenter: distToCenter,
         lateralOffset: roadPt.lateralOffset,
+        progressState: roadPt,
       };
     }
 
     // 3. Asphalt Road Surface
     if (distToCenter <= halfRoadWidth) {
+      const surfaceElevation = roadPt.position.y + roadPt.binormal.y * roadPt.lateralOffset;
       return {
-        elevation: roadPt.position.y,
+        elevation: surfaceElevation,
         normal: roadPt.normal,
         surfaceType: 'asphalt',
         frictionMultiplier: 1.0,
@@ -135,13 +139,16 @@ export class WorldDirector implements WorldSurfaceQueryProvider {
         roadSampleIndex: roadPt.sampleIndex,
         distanceToCenter: distToCenter,
         lateralOffset: roadPt.lateralOffset,
+        progressState: roadPt,
       };
     }
 
     // 4. Road Shoulder Transition Zone
     if (distToCenter <= halfRoadWidth + shoulderWidth) {
       const t = (distToCenter - halfRoadWidth) / shoulderWidth; // 0 to 1
-      const blendedElevation = roadPt.position.y * (1.0 - t) + terrainHeight * t;
+      const edgeLateral = roadPt.lateralOffset >= 0 ? halfRoadWidth : -halfRoadWidth;
+      const asphaltEdgeElevation = roadPt.position.y + roadPt.binormal.y * edgeLateral;
+      const blendedElevation = asphaltEdgeElevation * (1.0 - t) + terrainHeight * t;
       const blendedNormal = Vector3.Lerp(roadPt.normal, terrainNormal, t).normalize();
 
       return {
@@ -158,6 +165,7 @@ export class WorldDirector implements WorldSurfaceQueryProvider {
         roadSampleIndex: roadPt.sampleIndex,
         distanceToCenter: distToCenter,
         lateralOffset: roadPt.lateralOffset,
+        progressState: roadPt,
       };
     }
 
@@ -179,6 +187,7 @@ export class WorldDirector implements WorldSurfaceQueryProvider {
       roadSampleIndex: roadPt.sampleIndex,
       distanceToCenter: distToCenter,
       lateralOffset: roadPt.lateralOffset,
+      progressState: roadPt,
     };
   }
 

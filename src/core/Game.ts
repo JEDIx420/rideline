@@ -298,7 +298,11 @@ export class Game {
     );
 
     // Update World procedural streaming corridor (Slow-Roads architecture)
-    this.world.update(this.activeBike.position, dt);
+    this.world.update(
+      this.activeBike.position,
+      dt,
+      this.activeBike.physics.roadProgress || undefined
+    );
 
     // Update Camera
     this.cameraManager.update(dt, this.activeBike);

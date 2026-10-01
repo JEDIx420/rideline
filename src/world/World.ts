@@ -5,7 +5,7 @@ import { Road } from './Road';
 import { Terrain } from './Terrain';
 import { Environment } from './Environment';
 import { WorldDirector } from './WorldDirector';
-import { WorldSurfaceQuery, WorldSurfaceQueryProvider, RoadProgressHint } from './WorldSurfaceQuery';
+import { WorldSurfaceQuery, WorldSurfaceQueryProvider, RoadProgressHint, RoadProgressState } from './WorldSurfaceQuery';
 
 export type WorldMode = 'legacy' | 'streamed';
 
@@ -31,9 +31,9 @@ export class World implements WorldSurfaceQueryProvider {
     }
   }
 
-  public update(playerPos: Vector3, dt: number): void {
+  public update(playerPos: Vector3, dt: number, progress?: RoadProgressState): void {
     if (this.worldMode === 'streamed') {
-      this.director.update(playerPos, dt);
+      this.director.update(playerPos, dt, progress);
     }
   }
 
